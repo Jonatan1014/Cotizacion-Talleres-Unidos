@@ -1,0 +1,39 @@
+# document_processor/docker/docker-compose.yml
+version: '3.8'
+
+services:
+  document-processor:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: document-processor-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../uploads:/app/uploads
+      - ../outputs:/app/outputs
+      - ../logs:/app/logs
+    environment:
+      - PYTHONPATH=/app
+      - MAX_FILE_SIZE=50MB
+      - ALLOWED_EXTENSIONS=pdf,docx,xlsx,xlsm
+      - WEBHOOK_TIMEOUT=30
+    restart: unless-stopped
+    networks:
+      - document-processing-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: document-processor-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - document-processor
+    networks:
+      - document-processing-network
+
+networks:
+  document-processing-network:
+    driver: bridge
