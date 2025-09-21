@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y \
     ghostscript \
     libreoffice \
     poppler-utils \
-    imagemagick \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -21,12 +20,8 @@ RUN docker-php-ext-install \
     mysqli \
     pdo_mysql
 
-# Instalar Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
 # Configurar Apache
 RUN a2enmod rewrite
-COPY ./apache-config.conf /etc/apache2/sites-available/000-default.conf
 
 # Crear directorios necesarios
 RUN mkdir -p /var/www/html/uploads /var/www/html/logs
@@ -35,16 +30,13 @@ RUN mkdir -p /var/www/html/uploads /var/www/html/logs
 COPY ./app /var/www/html/
 
 # Establecer permisos
-RUN chown -R www-data:www-data /var/www/html/
+RUN chown -R www-www-data /var/www/html/
 RUN chmod -R 755 /var/www/html/uploads/
 RUN chmod -R 755 /var/www/html/logs/
 
-# Instalar dependencias de PHP
+# Instalar Composer y dependencias
 WORKDIR /var/www/html
-RUN composer require \
-    phpoffice/phpword \
-    phpoffice/phpspreadsheet \
-    guzzlehttp/guzzle \
-    setasign/fpdi
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+RUN composer install
 
 EXPOSE 80
