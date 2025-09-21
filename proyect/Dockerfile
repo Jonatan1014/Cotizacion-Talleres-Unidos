@@ -30,7 +30,7 @@ RUN mkdir -p /var/www/html/uploads /var/www/html/logs
 COPY ./app /var/www/html/
 
 # Establecer permisos
-RUN chown -R www-www-data /var/www/html/
+RUN chown -R www-data /var/www/html/
 RUN chmod -R 755 /var/www/html/uploads/
 RUN chmod -R 755 /var/www/html/logs/
 
