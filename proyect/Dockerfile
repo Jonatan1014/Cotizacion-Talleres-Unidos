@@ -26,17 +26,17 @@ RUN a2enmod rewrite
 # Crear directorios necesarios
 RUN mkdir -p /var/www/html/uploads /var/www/html/logs
 
-# Copiar archivos de la aplicación
-COPY ./app /var/www/html/
+# Copiar archivos de la aplicación (CORREGIDO)
+COPY ./app/ /var/www/html/
 
 # Establecer permisos
-RUN chown -R www-data /var/www/html/
+RUN chown -R www-data:www-data /var/www/html/
 RUN chmod -R 755 /var/www/html/uploads/
 RUN chmod -R 755 /var/www/html/logs/
 
 # Instalar Composer y dependencias
 WORKDIR /var/www/html
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-RUN composer install
+RUN if [ -f composer.json ]; then composer install --no-dev --optimize-autoloader; else echo "No composer.json file found"; fi
 
 EXPOSE 80
