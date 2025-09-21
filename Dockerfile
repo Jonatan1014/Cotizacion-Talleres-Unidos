@@ -29,6 +29,9 @@ RUN chown -R www-data:www-data /var/www/html
 # Habilitar mod_rewrite
 RUN a2enmod rewrite
 
+# ✅ AÑADIDO: Evitar advertencia de Apache
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
+
 # Configurar DocumentRoot a la carpeta public
 RUN echo "DocumentRoot /var/www/html/public" > /etc/apache2/sites-available/000-default.conf
 
