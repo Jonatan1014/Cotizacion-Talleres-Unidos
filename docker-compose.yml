@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "80:80"
+    environment:
+      - N8N_WEBHOOK_URL=https://n8n-with-postgres.srv971849.hstgr.cloud/webhook-test/65e9491c-0d11-415d-8f85-09a66447a6fd
