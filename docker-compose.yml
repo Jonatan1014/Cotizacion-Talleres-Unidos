@@ -1,9 +1,15 @@
 version: '3.8'
 
 services:
-  web:
+  app:
     build: .
+    container_name: document-processor
     ports:
       - "80:80"
+    volumes:
+      - ./app:/var/www/html
+      - ./logs:/var/log/apache2
     environment:
-      - N8N_WEBHOOK_URL=https://n8n-with-postgres.srv971849.hstgr.cloud/webhook-test/65e9491c-0d11-415d-8f85-09a66447a6fd
+      - WEBHOOK_URL=https://n8n-with-postgres.srv971849.hstgr.cloud/webhook-test/65e9491c-0d11-415d-8f85-09a66447a6fd
+      - UPLOAD_MAX_SIZE=50M
+    restart: unless-stopped
