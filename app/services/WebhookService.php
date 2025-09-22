@@ -13,35 +13,58 @@ class WebhookService {
             $fileContent = '';
             $fileBase64 = '';
             $fileName = '';
-            $fileMimeType = '';
+            $fileSize = 0;
+            $mimeType = '';
             
             if (file_exists($processedFilePath)) {
                 $fileContent = file_get_contents($processedFilePath);
                 $fileBase64 = base64_encode($fileContent);
                 $fileName = basename($processedFilePath);
-                $fileMimeType = mime_content_type($processedFilePath);
+                $fileSize = filesize($processedFilePath);
+                $mimeType = mime_content_type($processedFilePath);
             }
 
             // Preparar payload con ambos formatos
-            $payloadData = [
+            $jsonData = [
                 'original_file' => $data['original_file'],
                 'processed_file' => $data['processed_file'],
                 'file_type' => $data['file_type'],
                 'timestamp' => $data['timestamp'],
-                'file_content_base64' => $fileBase64,
-                'file_name' => $fileName,
-                'file_mime_type' => $fileMimeType,
-                'file_size' => strlen($fileContent)
+                'file_info' => [
+                    'name' => $fileName,
+                    'size' => $fileSize,
+                    'mime_type' => $mimeType,
+                    'base64_content' => $fileBase64
+                ]
             ];
 
-            $payload = json_encode($payloadData);
-            
+            // Crear una solicitud multipart/form-data manualmente
+            $boundary = '----WebKitFormBoundary' . uniqid();
+            $postData = '';
+
+            // Agregar datos JSON
+            $postData .= "--{$boundary}\r\n";
+            $postData .= "Content-Disposition: form-data; name=\"data\"\r\n";
+            $postData .= "Content-Type: application/json\r\n\r\n";
+            $postData .= json_encode($jsonData) . "\r\n";
+
+            // Agregar archivo binario si existe
+            if (!empty($fileContent)) {
+                $postData .= "--{$boundary}\r\n";
+                $postData .= "Content-Disposition: form-data; name=\"file\"; filename=\"{$fileName}\"\r\n";
+                $postData .= "Content-Type: {$mimeType}\r\n\r\n";
+                $postData .= $fileContent . "\r\n";
+            }
+
+            $postData .= "--{$boundary}--\r\n";
+
             $ch = curl_init($this->webhookUrl);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Content-Type: application/json',
-                'Content-Length: ' . strlen($payload)
+                'Content-Type: multipart/form-data; boundary=' . $boundary,
+                'Content-Length: ' . strlen($postData)
             ]);
             
             $response = curl_exec($ch);
