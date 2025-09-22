@@ -8,7 +8,27 @@ class WebhookService {
 
     public function sendToWebhook($data) {
         try {
-            $payload = json_encode($data);
+            // Leer el contenido del archivo procesado
+            $processedFilePath = $data['processed_file'];
+            $fileContent = '';
+            $fileBase64 = '';
+            
+            if (file_exists($processedFilePath)) {
+                $fileContent = file_get_contents($processedFilePath);
+                $fileBase64 = base64_encode($fileContent);
+            }
+
+            // Preparar payload con contenido base64
+            $payloadData = [
+                'original_file' => $data['original_file'],
+                'processed_file' => $data['processed_file'],
+                'file_type' => $data['file_type'],
+                'timestamp' => $data['timestamp'],
+                'file_content_base64' => $fileBase64,
+                'file_name' => basename($data['processed_file'])
+            ];
+
+            $payload = json_encode($payloadData);
             
             $ch = curl_init($this->webhookUrl);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
