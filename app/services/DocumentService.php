@@ -11,7 +11,7 @@ class DocumentService {
 
     public function __construct() {
         $this->uploadDir = __DIR__ . '/../uploads/';
-        $this->processedDir = __dirname . '/../uploads/processed/';
+        $this->processedDir = __DIR__ . '/../uploads/processed/';
         $this->fileConverter = new FileConverter();
         $this->webhookService = new WebhookService();
 
