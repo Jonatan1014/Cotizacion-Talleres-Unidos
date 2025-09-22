@@ -1,6 +1,6 @@
 FROM php:8.1-apache
 
-# Install system dependencies
+# Install system dependencies including xvfb for headless LibreOffice
 RUN apt-get update && apt-get install -y \
     libzip-dev \
     libpng-dev \
@@ -11,7 +11,9 @@ RUN apt-get update && apt-get install -y \
     libreoffice-core \
     libreoffice-common \
     libreoffice-writer \
+    libreoffice-calc \
     poppler-utils \
+    xvfb \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,13 +27,10 @@ RUN a2enmod rewrite
 # Configure Apache to serve files from /var/www/html
 COPY ./app /var/www/html
 
-# Create user directory for LibreOffice
-RUN mkdir -p /var/www/.config/libreoffice
-RUN chown -R www-data:www-data /var/www/.config
-
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html
-RUN chmod -R 755 /var/www/html
+# Create directories with proper permissions
+RUN mkdir -p /tmp/libreoffice /var/www/.config/libreoffice
+RUN chown -R www-data:www-data /var/www/html /tmp/libreoffice
+RUN chmod -R 777 /tmp
 
 # Expose port
 EXPOSE 80
