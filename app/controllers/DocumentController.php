@@ -18,7 +18,7 @@ class DocumentController {
             switch ($path) {
                 case '/api/documents':
                     if ($method === 'POST') {
-                        $this->uploadDocument();
+                        $this->uploadAndProcessDocument(); // ← CAMBIO AQUÍ
                     } elseif ($method === 'GET') {
                         $this->getDocuments();
                     } else {
@@ -26,7 +26,7 @@ class DocumentController {
                     }
                     break;
                 
-                case '/api/documents/process':
+                case '/api/documents/manual': // Nuevo endpoint para procesamiento manual
                     if ($method === 'POST') {
                         $this->processDocument();
                     } else {
@@ -42,6 +42,21 @@ class DocumentController {
                     }
                     break;
                 
+                case '/': // Endpoint raíz
+                    if ($method === 'GET') {
+                        $this->sendResponse(200, [
+                            'message' => 'Document Processing API - Automatic Conversion',
+                            'endpoints' => [
+                                'POST /api/documents - Upload and auto-process document',
+                                'GET /api/health - Health check',
+                                'POST /api/documents/manual - Manual processing (deprecated)'
+                            ]
+                        ]);
+                    } else {
+                        $this->sendError(405, 'Method not allowed');
+                    }
+                    break;
+                
                 default:
                     $this->sendError(404, 'Endpoint not found');
             }
@@ -50,19 +65,35 @@ class DocumentController {
         }
     }
 
-    private function uploadDocument() {
+    private function uploadAndProcessDocument() {
         if (!isset($_FILES['document'])) {
             $this->sendError(400, 'No document provided');
             return;
         }
 
         $file = $_FILES['document'];
-        $result = $this->documentService->uploadDocument($file);
+        $uploadResult = $this->documentService->uploadDocument($file);
 
-        if ($result['success']) {
-            $this->sendResponse(201, $result);
+        if (!$uploadResult['success']) {
+            $this->sendError(400, $uploadResult['message']);
+            return;
+        }
+
+        // Procesar automáticamente
+        $processResult = $this->documentService->processDocument($uploadResult['document']['file_path']);
+
+        if ($processResult['success']) {
+            $this->sendResponse(200, [
+                'success' => true,
+                'upload' => $uploadResult['document'],
+                'processing' => [
+                    'processed_file' => $processResult['processed_file'],
+                    'webhook_sent' => $processResult['webhook_sent']
+                ],
+                'message' => 'Document uploaded, processed and sent to webhook automatically'
+            ]);
         } else {
-            $this->sendError(400, $result['message']);
+            $this->sendError(400, 'Processing failed: ' . $processResult['message']);
         }
     }
 
