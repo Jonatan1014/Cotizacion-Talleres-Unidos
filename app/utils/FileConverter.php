@@ -47,7 +47,7 @@ class FileConverter {
         try {
             // Verificar que el archivo exista y sea legible
             if (!file_exists($docxPath) || !is_readable($docxPath)) {
-                throw new Exception('DOCX file does not exist or is not readable: ' . $docxPath . ' (File exists: ' . (file_exists($docxPath) ? 'yes' : 'no') . ', Readable: ' . (is_readable($docxPath) ? 'yes' : 'no') . ')');
+                throw new Exception('DOCX file does not exist or is not readable: ' . $docxPath);
             }
 
             $filename = pathinfo($docxPath, PATHINFO_FILENAME);
@@ -68,8 +68,8 @@ class FileConverter {
             // Asegurar permisos correctos
             chmod($tempFile, 0644);
             
-            // Convert DOCX to PDF using LibreOffice with better options
-            $command = "timeout 60s HOME=/tmp xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' libreoffice --headless --invisible --nodefault --nofirststartwizard --nolockcheck --nologo --norestore --convert-to pdf --outdir " . escapeshellarg($tempDir) . " " . escapeshellarg($tempFile) . " 2>&1";
+            // Convert DOCX to PDF using LibreOffice with corrected command
+            $command = "HOME=/tmp timeout 60 xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' libreoffice --headless --invisible --nodefault --nofirststartwizard --nolockcheck --nologo --norestore --convert-to pdf --outdir " . escapeshellarg($tempDir) . " " . escapeshellarg($tempFile) . " 2>&1";
             exec($command, $output, $returnCode);
             
             // Debug: mostrar salida de LibreOffice
@@ -126,7 +126,7 @@ class FileConverter {
             chmod($tempFile, 0644);
             
             // Convert Excel to PDF using LibreOffice
-            $command = "timeout 60s HOME=/tmp xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' libreoffice --headless --invisible --nodefault --nofirststartwizard --nolockcheck --nologo --norestore --convert-to pdf --outdir " . escapeshellarg($tempDir) . " " . escapeshellarg($tempFile) . " 2>&1";
+            $command = "HOME=/tmp timeout 60 xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' libreoffice --headless --invisible --nodefault --nofirststartwizard --nolockcheck --nologo --norestore --convert-to pdf --outdir " . escapeshellarg($tempDir) . " " . escapeshellarg($tempFile) . " 2>&1";
             exec($command, $output, $returnCode);
             
             // Mover el archivo convertido al directorio final
