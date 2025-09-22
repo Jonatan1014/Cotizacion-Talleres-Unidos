@@ -12,20 +12,26 @@ class WebhookService {
             $processedFilePath = $data['processed_file'];
             $fileContent = '';
             $fileBase64 = '';
+            $fileName = '';
+            $fileMimeType = '';
             
             if (file_exists($processedFilePath)) {
                 $fileContent = file_get_contents($processedFilePath);
                 $fileBase64 = base64_encode($fileContent);
+                $fileName = basename($processedFilePath);
+                $fileMimeType = mime_content_type($processedFilePath);
             }
 
-            // Preparar payload con contenido base64
+            // Preparar payload con ambos formatos
             $payloadData = [
                 'original_file' => $data['original_file'],
                 'processed_file' => $data['processed_file'],
                 'file_type' => $data['file_type'],
                 'timestamp' => $data['timestamp'],
                 'file_content_base64' => $fileBase64,
-                'file_name' => basename($data['processed_file'])
+                'file_name' => $fileName,
+                'file_mime_type' => $fileMimeType,
+                'file_size' => strlen($fileContent)
             ];
 
             $payload = json_encode($payloadData);

@@ -11,7 +11,7 @@ class DocumentService {
 
     public function __construct() {
         $this->uploadDir = __DIR__ . '/../uploads/';
-        $this->processedDir = __DIR__ . '/../uploads/processed/';
+        $this->processedDir = __dirname . '/../uploads/processed/';
         $this->fileConverter = new FileConverter();
         $this->webhookService = new WebhookService();
 
@@ -106,17 +106,21 @@ class DocumentService {
                     throw new Exception('Unsupported file type');
             }
 
+            // Limpiar las rutas usando el método correcto
+            $cleanOriginalPath = $this->normalizePath($filePath);
+            $cleanProcessedPath = $this->normalizePath($processedPath);
+
             // Send to webhook
             $webhookResult = $this->webhookService->sendToWebhook([
-                'original_file' => $this->cleanPath($filePath),
-                'processed_file' => $this->cleanPath($processedPath),
+                'original_file' => $cleanOriginalPath,
+                'processed_file' => $cleanProcessedPath,
                 'file_type' => $fileType,
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
 
             return [
                 'success' => true,
-                'processed_file' => $processedPath,
+                'processed_file' => $cleanProcessedPath,
                 'webhook_sent' => $webhookResult,
                 'message' => 'Document processed successfully'
             ];
@@ -146,6 +150,31 @@ class DocumentService {
         }
         
         return $documents;
+    }
+
+    private function normalizePath($path) {
+        // Convertir a ruta relativa limpia
+        $path = str_replace('\\', '/', $path); // Normalizar barras
+        $path = preg_replace('/\/+/', '/', $path); // Eliminar barras dobles
+        
+        // Convertir rutas absolutas a relativas si es necesario
+        if (strpos($path, '/var/www/html/') === 0) {
+            $path = substr($path, strlen('/var/www/html/'));
+        }
+        
+        // Eliminar .. redundantes
+        $pathParts = explode('/', $path);
+        $newPathParts = [];
+        
+        foreach ($pathParts as $part) {
+            if ($part === '..') {
+                array_pop($newPathParts);
+            } elseif ($part !== '' && $part !== '.') {
+                $newPathParts[] = $part;
+            }
+        }
+        
+        return '/' . implode('/', $newPathParts);
     }
 }
 ?>
