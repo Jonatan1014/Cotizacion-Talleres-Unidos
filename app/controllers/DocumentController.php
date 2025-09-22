@@ -26,6 +26,16 @@ class DocumentController {
                     }
                     break;
                 
+                // En DocumentController.php, agregar nuevo endpoint:
+                case '/api/documents/bin':
+                    if ($method === 'POST') {
+                        $this->uploadBinaryDocument();
+                    } else {
+                        $this->sendError(405, 'Method not allowed');
+                    }
+                    break;
+
+                
                 case '/api/documents/manual': // Nuevo endpoint para procesamiento manual
                     if ($method === 'POST') {
                         $this->processDocument();
@@ -96,6 +106,35 @@ class DocumentController {
             $this->sendError(400, 'Processing failed: ' . $processResult['message']);
         }
     }
+
+    private function uploadBinaryDocument() {
+    $input = file_get_contents('php://input');
+    
+    if (empty($input)) {
+        $this->sendError(400, 'No document data provided');
+        return;
+    }
+    
+    // Obtener nombre del archivo del header o usar uno por defecto
+    $filename = $_SERVER['HTTP_X_FILENAME'] ?? 'document_' . uniqid() . '.bin';
+    $filePath = $this->uploadDir . $filename;
+    
+    // Guardar el archivo binario
+    if (file_put_contents($filePath, $input) === false) {
+        $this->sendError(500, 'Failed to save document');
+        return;
+    }
+    
+    // Procesar automáticamente
+    $result = $this->documentService->processDocument($filePath);
+    
+    if ($result['success']) {
+        $this->sendResponse(200, $result);
+    } else {
+        $this->sendError(400, $result['message']);
+    }
+}
+
 
     private function processDocument() {
         $input = json_decode(file_get_contents('php://input'), true);
