@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     ghostscript \
     libreoffice \
+    libreoffice-core \
+    libreoffice-common \
+    libreoffice-writer \
     poppler-utils \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -16,17 +19,15 @@ RUN apt-get update && apt-get install -y \
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg
 RUN docker-php-ext-install -j$(nproc) gd zip pdo_mysql
 
-# Install Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
 # Enable Apache modules
 RUN a2enmod rewrite
 
-# Set working directory
-WORKDIR /var/www/html
-
-# Copy application files
+# Configure Apache to serve files from /var/www/html
 COPY ./app /var/www/html
+
+# Create user directory for LibreOffice
+RUN mkdir -p /var/www/.config/libreoffice
+RUN chown -R www-data:www-data /var/www/.config
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html
