@@ -24,41 +24,47 @@ class DocumentService {
         }
     }
 
-    public function uploadDocument($file) {
+    public function uploadDocument($file, $alreadySaved = false) {
         try {
             // Validate file
-            if ($file['error'] !== UPLOAD_ERR_OK) {
+            if (!$alreadySaved && $file['error'] !== UPLOAD_ERR_OK) {
                 throw new Exception('File upload error: ' . $file['error']);
             }
 
             // Check file size (50MB limit)
-            if ($file['size'] > 50 * 1024 * 1024) {
+            $fileSize = $alreadySaved ? filesize($file['tmp_name']) : $file['size'];
+            if ($fileSize > 50 * 1024 * 1024) {
                 throw new Exception('File size exceeds 50MB limit');
             }
 
             // Get file info
-            $fileType = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $fileName = $alreadySaved ? $file['name'] : $file['name'];
+            $fileType = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
             $allowedTypes = ['pdf', 'docx', 'xlsx', 'xlsm'];
             
             if (!in_array($fileType, $allowedTypes)) {
                 throw new Exception('File type not allowed. Allowed types: ' . implode(', ', $allowedTypes));
             }
 
-            // Generate unique filename
-            $filename = uniqid() . '_' . $file['name'];
-            $filePath = $this->uploadDir . $filename;
+            $filePath = $alreadySaved ? $file['tmp_name'] : '';
 
-            // Move uploaded file
-            if (!move_uploaded_file($file['tmp_name'], $filePath)) {
-                throw new Exception('Failed to move uploaded file');
+            if (!$alreadySaved) {
+                // Generate unique filename
+                $filename = uniqid() . '_' . $file['name'];
+                $filePath = $this->uploadDir . $filename;
+
+                // Move uploaded file
+                if (!move_uploaded_file($file['tmp_name'], $filePath)) {
+                    throw new Exception('Failed to move uploaded file');
+                }
             }
 
             // Create document record
             $document = new Document([
-                'original_name' => $file['name'],
+                'original_name' => $fileName,
                 'file_path' => $filePath,
                 'file_type' => $fileType,
-                'file_size' => $file['size'],
+                'file_size' => $fileSize,
                 'status' => 'uploaded',
                 'created_at' => date('Y-m-d H:i:s'),
                 'updated_at' => date('Y-m-d H:i:s')
@@ -106,17 +112,21 @@ class DocumentService {
                     throw new Exception('Unsupported file type');
             }
 
+            // Limpiar las rutas antes de enviar al webhook
+            $cleanOriginalPath = $this->normalizePath($filePath);
+            $cleanProcessedPath = $this->normalizePath($processedPath);
+
             // Send to webhook
             $webhookResult = $this->webhookService->sendToWebhook([
-                'original_file' => $filePath,
-                'processed_file' => $processedPath,
+                'original_file' => $cleanOriginalPath,
+                'processed_file' => $cleanProcessedPath,
                 'file_type' => $fileType,
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
 
             return [
                 'success' => true,
-                'processed_file' => $processedPath,
+                'processed_file' => $cleanProcessedPath,
                 'webhook_sent' => $webhookResult,
                 'message' => 'Document processed successfully'
             ];
@@ -146,6 +156,31 @@ class DocumentService {
         }
         
         return $documents;
+    }
+
+    private function normalizePath($path) {
+        // Convertir a ruta relativa limpia
+        $path = str_replace('\\', '/', $path); // Normalizar barras
+        $path = preg_replace('/\/+/', '/', $path); // Eliminar barras dobles
+        
+        // Convertir rutas absolutas a relativas si es necesario
+        if (strpos($path, '/var/www/html/') === 0) {
+            $path = substr($path, strlen('/var/www/html/'));
+        }
+        
+        // Eliminar .. redundantes
+        $pathParts = explode('/', $path);
+        $newPathParts = [];
+        
+        foreach ($pathParts as $part) {
+            if ($part === '..') {
+                array_pop($newPathParts);
+            } elseif ($part !== '' && $part !== '.') {
+                $newPathParts[] = $part;
+            }
+        }
+        
+        return '/' . implode('/', $newPathParts);
     }
 }
 ?>

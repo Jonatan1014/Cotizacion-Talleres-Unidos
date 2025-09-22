@@ -4,9 +4,11 @@ require_once 'models/Document.php';
 
 class DocumentController {
     private $documentService;
+    private $uploadDir;
 
     public function __construct() {
         $this->documentService = new DocumentService();
+        $this->uploadDir = __DIR__ . '/../uploads/';
     }
 
     public function handleRequest() {
@@ -18,7 +20,7 @@ class DocumentController {
             switch ($path) {
                 case '/api/documents':
                     if ($method === 'POST') {
-                        $this->uploadAndProcessDocument(); // ← CAMBIO AQUÍ
+                        $this->uploadAndProcessDocument();
                     } elseif ($method === 'GET') {
                         $this->getDocuments();
                     } else {
@@ -26,7 +28,6 @@ class DocumentController {
                     }
                     break;
                 
-                // En DocumentController.php, agregar nuevo endpoint:
                 case '/api/documents/bin':
                     if ($method === 'POST') {
                         $this->uploadBinaryDocument();
@@ -35,8 +36,7 @@ class DocumentController {
                     }
                     break;
 
-                
-                case '/api/documents/manual': // Nuevo endpoint para procesamiento manual
+                case '/api/documents/manual':
                     if ($method === 'POST') {
                         $this->processDocument();
                     } else {
@@ -52,12 +52,13 @@ class DocumentController {
                     }
                     break;
                 
-                case '/': // Endpoint raíz
+                case '/':
                     if ($method === 'GET') {
                         $this->sendResponse(200, [
                             'message' => 'Document Processing API - Automatic Conversion',
                             'endpoints' => [
-                                'POST /api/documents - Upload and auto-process document',
+                                'POST /api/documents - Upload and auto-process document (multipart)',
+                                'POST /api/documents/bin - Upload and auto-process document (binary)',
                                 'GET /api/health - Health check',
                                 'POST /api/documents/manual - Manual processing (deprecated)'
                             ]
@@ -108,33 +109,89 @@ class DocumentController {
     }
 
     private function uploadBinaryDocument() {
-    $input = file_get_contents('php://input');
-    
-    if (empty($input)) {
-        $this->sendError(400, 'No document data provided');
-        return;
+        $input = file_get_contents('php://input');
+        
+        if (empty($input)) {
+            $this->sendError(400, 'No document data provided');
+            return;
+        }
+        
+        // Obtener nombre del archivo del header o usar uno por defecto
+        $filename = $_SERVER['HTTP_X_FILENAME'] ?? ('document_' . uniqid());
+        
+        // Asegurar que tenga extensión
+        if (pathinfo($filename, PATHINFO_EXTENSION) === '') {
+            // Intentar determinar el tipo de archivo por su contenido
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo->buffer($input);
+            
+            $extensions = [
+                'application/pdf' => '.pdf',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => '.docx',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => '.xlsx',
+                'application/vnd.ms-excel.sheet.macroEnabled.12' => '.xlsm'
+            ];
+            
+            $extension = $extensions[$mimeType] ?? '.bin';
+            $filename .= $extension;
+        }
+        
+        $filePath = $this->uploadDir . $filename;
+        
+        // Validar tamaño (50MB máximo)
+        if (strlen($input) > 50 * 1024 * 1024) {
+            $this->sendError(400, 'File size exceeds 50MB limit');
+            return;
+        }
+        
+        // Validar tipo de archivo
+        $allowedExtensions = ['pdf', 'docx', 'xlsx', 'xlsm'];
+        $fileExtension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if (!in_array($fileExtension, $allowedExtensions)) {
+            $this->sendError(400, 'File type not allowed. Allowed types: ' . implode(', ', $allowedExtensions));
+            return;
+        }
+        
+        // Guardar el archivo binario
+        if (file_put_contents($filePath, $input) === false) {
+            $this->sendError(500, 'Failed to save document');
+            return;
+        }
+        
+        // Crear un array similar al $_FILES para mantener consistencia
+        $fileInfo = [
+            'name' => $filename,
+            'type' => mime_content_type($filePath),
+            'tmp_name' => $filePath,
+            'error' => 0,
+            'size' => strlen($input)
+        ];
+        
+        // Usar el mismo método de procesamiento que uploadAndProcessDocument
+        $uploadResult = $this->documentService->uploadDocument($fileInfo, true); // true = ya está guardado
+        
+        if (!$uploadResult['success']) {
+            $this->sendError(400, $uploadResult['message']);
+            return;
+        }
+        
+        // Procesar automáticamente
+        $processResult = $this->documentService->processDocument($uploadResult['document']['file_path']);
+        
+        if ($processResult['success']) {
+            $this->sendResponse(200, [
+                'success' => true,
+                'upload' => $uploadResult['document'],
+                'processing' => [
+                    'processed_file' => $processResult['processed_file'],
+                    'webhook_sent' => $processResult['webhook_sent']
+                ],
+                'message' => 'Document uploaded, processed and sent to webhook automatically'
+            ]);
+        } else {
+            $this->sendError(400, 'Processing failed: ' . $processResult['message']);
+        }
     }
-    
-    // Obtener nombre del archivo del header o usar uno por defecto
-    $filename = $_SERVER['HTTP_X_FILENAME'] ?? 'document_' . uniqid() . '.bin';
-    $filePath = $this->uploadDir . $filename;
-    
-    // Guardar el archivo binario
-    if (file_put_contents($filePath, $input) === false) {
-        $this->sendError(500, 'Failed to save document');
-        return;
-    }
-    
-    // Procesar automáticamente
-    $result = $this->documentService->processDocument($filePath);
-    
-    if ($result['success']) {
-        $this->sendResponse(200, $result);
-    } else {
-        $this->sendError(400, $result['message']);
-    }
-}
-
 
     private function processDocument() {
         $input = json_decode(file_get_contents('php://input'), true);
