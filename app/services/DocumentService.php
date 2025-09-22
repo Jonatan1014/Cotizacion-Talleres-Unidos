@@ -108,8 +108,8 @@ class DocumentService {
 
             // Send to webhook
             $webhookResult = $this->webhookService->sendToWebhook([
-                'original_file' => $filePath,
-                'processed_file' => $processedPath,
+                'original_file' => $this->cleanPath($filePath),
+                'processed_file' => $this->cleanPath($processedPath),
                 'file_type' => $fileType,
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
