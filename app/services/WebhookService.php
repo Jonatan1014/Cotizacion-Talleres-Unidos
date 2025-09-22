@@ -11,50 +11,45 @@ class WebhookService {
             // Leer el contenido del archivo procesado
             $processedFilePath = $data['processed_file'];
             $fileContent = '';
-            $fileBase64 = '';
             $fileName = '';
             $fileSize = 0;
             $mimeType = '';
             
             if (file_exists($processedFilePath)) {
                 $fileContent = file_get_contents($processedFilePath);
-                $fileBase64 = base64_encode($fileContent);
                 $fileName = basename($processedFilePath);
                 $fileSize = filesize($processedFilePath);
                 $mimeType = mime_content_type($processedFilePath);
+            } else {
+                throw new Exception('Processed file not found: ' . $processedFilePath);
             }
 
-            // Preparar payload con ambos formatos
-            $jsonData = [
+            // Crear una solicitud multipart/form-data con solo el archivo binario
+            $boundary = '----WebKitFormBoundary' . uniqid();
+            $postData = '';
+
+            // Agregar metadatos como campos individuales
+            $metadata = [
                 'original_file' => $data['original_file'],
                 'processed_file' => $data['processed_file'],
                 'file_type' => $data['file_type'],
                 'timestamp' => $data['timestamp'],
-                'file_info' => [
-                    'name' => $fileName,
-                    'size' => $fileSize,
-                    'mime_type' => $mimeType,
-                    'base64_content' => $fileBase64
-                ]
+                'file_name' => $fileName,
+                'file_size' => $fileSize,
+                'mime_type' => $mimeType
             ];
 
-            // Crear una solicitud multipart/form-data manualmente
-            $boundary = '----WebKitFormBoundary' . uniqid();
-            $postData = '';
-
-            // Agregar datos JSON
-            $postData .= "--{$boundary}\r\n";
-            $postData .= "Content-Disposition: form-data; name=\"data\"\r\n";
-            $postData .= "Content-Type: application/json\r\n\r\n";
-            $postData .= json_encode($jsonData) . "\r\n";
-
-            // Agregar archivo binario si existe
-            if (!empty($fileContent)) {
+            foreach ($metadata as $key => $value) {
                 $postData .= "--{$boundary}\r\n";
-                $postData .= "Content-Disposition: form-data; name=\"file\"; filename=\"{$fileName}\"\r\n";
-                $postData .= "Content-Type: {$mimeType}\r\n\r\n";
-                $postData .= $fileContent . "\r\n";
+                $postData .= "Content-Disposition: form-data; name=\"{$key}\"\r\n\r\n";
+                $postData .= "{$value}\r\n";
             }
+
+            // Agregar archivo binario
+            $postData .= "--{$boundary}\r\n";
+            $postData .= "Content-Disposition: form-data; name=\"file\"; filename=\"{$fileName}\"\r\n";
+            $postData .= "Content-Type: {$mimeType}\r\n\r\n";
+            $postData .= $fileContent . "\r\n";
 
             $postData .= "--{$boundary}--\r\n";
 
@@ -69,7 +64,12 @@ class WebhookService {
             
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
             curl_close($ch);
+            
+            if ($error) {
+                throw new Exception('cURL Error: ' . $error);
+            }
             
             return [
                 'success' => $httpCode >= 200 && $httpCode < 300,
