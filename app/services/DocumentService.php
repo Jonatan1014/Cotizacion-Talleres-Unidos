@@ -84,7 +84,6 @@ class DocumentService {
         }
     }
 
-    // Elimina el método normalizePath y cambia el proceso de webhook
     public function processDocument($documentId) {
         try {
             // For simplicity, we'll use the file path as ID
@@ -130,6 +129,55 @@ class DocumentService {
                 'success' => true,
                 'processed_file' => $processedPath,
                 'webhook_sent' => $webhookResult,
+                'webhook_url' => $webhookResult['webhook_url'],
+                'message' => 'Document processed successfully'
+            ];
+
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage()
+            ];
+        }
+    }
+
+    // NUEVO MÉTODO: Procesar documento y devolver ruta del archivo transformado
+    public function processDocumentForReturn($documentId) {
+        try {
+            // For simplicity, we'll use the file path as ID
+            // In a real application, you would query a database
+            $filePath = $documentId;
+            
+            if (!file_exists($filePath)) {
+                throw new Exception('Document not found');
+            }
+
+            $fileType = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+            $processedPath = '';
+
+            switch ($fileType) {
+                case 'pdf':
+                    $processedPath = $this->fileConverter->convertPdfToPng($filePath);
+                    break;
+                case 'docx':
+                    $processedPath = $this->fileConverter->convertDocxToPdf($filePath);
+                    break;
+                case 'xlsx':
+                case 'xlsm':
+                    $processedPath = $this->fileConverter->convertExcelToPdf($filePath);
+                    break;
+                default:
+                    throw new Exception('Unsupported file type');
+            }
+
+            // Verificar que el archivo procesado exista
+            if (!file_exists($processedPath)) {
+                throw new Exception('Processed file was not created: ' . $processedPath);
+            }
+
+            return [
+                'success' => true,
+                'processed_file' => $processedPath,
                 'message' => 'Document processed successfully'
             ];
 
@@ -158,31 +206,6 @@ class DocumentService {
         }
         
         return $documents;
-    }
-
-    private function normalizePath($path) {
-        // Convertir a ruta relativa limpia
-        $path = str_replace('\\', '/', $path); // Normalizar barras
-        $path = preg_replace('/\/+/', '/', $path); // Eliminar barras dobles
-        
-        // Convertir rutas absolutas a relativas si es necesario
-        if (strpos($path, '/var/www/html/') === 0) {
-            $path = substr($path, strlen('/var/www/html/'));
-        }
-        
-        // Eliminar .. redundantes
-        $pathParts = explode('/', $path);
-        $newPathParts = [];
-        
-        foreach ($pathParts as $part) {
-            if ($part === '..') {
-                array_pop($newPathParts);
-            } elseif ($part !== '' && $part !== '.') {
-                $newPathParts[] = $part;
-            }
-        }
-        
-        return '/' . implode('/', $newPathParts);
     }
 }
 ?>
