@@ -84,6 +84,7 @@ class DocumentService {
         }
     }
 
+    // Elimina el método normalizePath y cambia el proceso de webhook
     public function processDocument($documentId) {
         try {
             // For simplicity, we'll use the file path as ID
@@ -112,21 +113,22 @@ class DocumentService {
                     throw new Exception('Unsupported file type');
             }
 
-            // Limpiar las rutas antes de enviar al webhook
-            $cleanOriginalPath = $this->normalizePath($filePath);
-            $cleanProcessedPath = $this->normalizePath($processedPath);
+            // Verificar que el archivo procesado exista
+            if (!file_exists($processedPath)) {
+                throw new Exception('Processed file was not created: ' . $processedPath);
+            }
 
-            // Send to webhook
+            // Send to webhook with absolute paths
             $webhookResult = $this->webhookService->sendToWebhook([
-                'original_file' => $cleanOriginalPath,
-                'processed_file' => $cleanProcessedPath,
+                'original_file' => $filePath,
+                'processed_file' => $processedPath,
                 'file_type' => $fileType,
                 'timestamp' => date('Y-m-d H:i:s')
             ]);
 
             return [
                 'success' => true,
-                'processed_file' => $cleanProcessedPath,
+                'processed_file' => $processedPath,
                 'webhook_sent' => $webhookResult,
                 'message' => 'Document processed successfully'
             ];

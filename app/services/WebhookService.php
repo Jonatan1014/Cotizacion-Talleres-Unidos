@@ -74,13 +74,17 @@ class WebhookService {
             return [
                 'success' => $httpCode >= 200 && $httpCode < 300,
                 'http_code' => $httpCode,
-                'response' => $response
+                'response' => $response,
+                'webhook_url' => $this->webhookUrl  // ← Añadido
+
             ];
             
         } catch (Exception $e) {
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'webhook_url' => $this->webhookUrl  // ← Añadido
+
             ];
         }
     }

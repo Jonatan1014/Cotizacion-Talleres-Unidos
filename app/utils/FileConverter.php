@@ -37,7 +37,7 @@ class FileConverter {
                 throw new Exception('PNG file was not created');
             }
             
-            return $outputPath;
+            return $outputPath; // ← Devuelve la ruta absoluta
         } catch (Exception $e) {
             throw new Exception('PDF to PNG conversion failed: ' . $e->getMessage());
         }
@@ -94,7 +94,7 @@ class FileConverter {
                 throw new Exception('PDF file was not created');
             }
             
-            return $outputPath;
+            return $outputPath; // ← Devuelve la ruta absoluta
         } catch (Exception $e) {
             throw new Exception('DOCX to PDF conversion failed: ' . $e->getMessage());
         }
@@ -146,7 +146,7 @@ class FileConverter {
                 throw new Exception('PDF file was not created');
             }
             
-            return $outputPath;
+            return $outputPath; // ← Devuelve la ruta absoluta
         } catch (Exception $e) {
             throw new Exception('Excel to PDF conversion failed: ' . $e->getMessage());
         }

@@ -10,6 +10,6 @@ services:
       - ./app:/var/www/html
       - ./logs:/var/log/apache2
     environment:
-      - WEBHOOK_URL=https://n8n.systemautomatic.xyz/webhook-test/envio-conversion
+      - WEBHOOK_URL=${WEBHOOK_URL}
       - UPLOAD_MAX_SIZE=50M
     restart: unless-stopped
