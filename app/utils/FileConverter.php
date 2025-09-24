@@ -16,21 +16,41 @@ class FileConverter {
                 throw new Exception('PDF file does not exist or is not readable: ' . $pdfPath);
             }
 
-            // Obtener el nombre base del archivo original (sin extensión)
-            $originalNameWithoutExt = pathinfo($pdfPath, PATHINFO_FILENAME);
-            
-            // Generar ID único
-            $uniqueId = uniqid();
-            
             // Contar el número de páginas en el PDF
-            $pageCount = $this->getPdfPageCount($pdfPath);
+            $command = "pdfinfo " . escapeshellarg($pdfPath) . " 2>&1";
+            exec($command, $output, $returnCode);
             
-            // Si tiene más de 1 página, devolver el archivo sin transformar
-            if ($pageCount > 1) {
-                return $this->returnUnchangedPdf($pdfPath, $uniqueId, $originalNameWithoutExt);
+            if ($returnCode !== 0) {
+                throw new Exception('Failed to get PDF info. Command: ' . $command . ' Output: ' . implode("\n", $output));
             }
             
-            // Crear nuevo nombre: ID-OriginalName.png
+            $pages = 0;
+            foreach ($output as $line) {
+                if (preg_match('/^Pages:\s+(\d+)/', $line, $matches)) {
+                    $pages = (int)$matches[1];
+                    break;
+                }
+            }
+            
+            // Si el PDF tiene más de 1 página, devolver el archivo original sin cambios
+            if ($pages > 1) {
+                // Generar nuevo nombre con ID para mantener consistencia
+                $originalNameWithoutExt = pathinfo($pdfPath, PATHINFO_FILENAME);
+                $uniqueId = uniqid();
+                $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.pdf';
+                $outputPath = $this->processedDir . $newFileName;
+                
+                // Copiar el archivo original al directorio de procesados
+                if (!copy($pdfPath, $outputPath)) {
+                    throw new Exception('Failed to copy multi-page PDF to processed directory');
+                }
+                
+                return $outputPath;
+            }
+            
+            // Si el PDF tiene solo 1 página, convertir a PNG
+            $originalNameWithoutExt = pathinfo($pdfPath, PATHINFO_FILENAME);
+            $uniqueId = uniqid();
             $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.png';
             $outputPath = $this->processedDir . $newFileName;
             
@@ -54,43 +74,8 @@ class FileConverter {
             
             return $outputPath; // ← Devuelve la ruta absoluta
         } catch (Exception $e) {
-            throw new Exception('PDF to PNG conversion failed: ' . $e->getMessage());
+            throw new Exception('PDF conversion failed: ' . $e->getMessage());
         }
-    }
-
-    // Método para contar páginas en un PDF
-    private function getPdfPageCount($pdfPath) {
-        $command = "pdfinfo " . escapeshellarg($pdfPath) . " 2>&1";
-        exec($command, $output, $returnCode);
-        
-        if ($returnCode !== 0) {
-            throw new Exception('Failed to get PDF page count. Command: ' . $command . ' Output: ' . implode("\n", $output));
-        }
-        
-        foreach ($output as $line) {
-            if (strpos($line, 'Pages:') !== false) {
-                preg_match('/Pages:\s*(\d+)/', $line, $matches);
-                if (isset($matches[1])) {
-                    return (int)$matches[1];
-                }
-            }
-        }
-        
-        return 1; // Por defecto, asumir 1 página si no se puede determinar
-    }
-
-    // Método para devolver PDF sin cambios (solo renombrado)
-    private function returnUnchangedPdf($pdfPath, $uniqueId, $originalNameWithoutExt) {
-        // Crear nuevo nombre: ID-OriginalName.pdf
-        $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.pdf';
-        $outputPath = $this->processedDir . $newFileName;
-        
-        // Copiar el archivo original al nuevo nombre
-        if (!copy($pdfPath, $outputPath)) {
-            throw new Exception('Failed to copy PDF file to new name');
-        }
-        
-        return $outputPath;
     }
 
     public function convertDocxToPdf($docxPath) {
