@@ -175,6 +175,9 @@ class DocumentService {
                 throw new Exception('Processed file was not created: ' . $processedPath);
             }
 
+            // Asegurar que el nombre tenga el formato ID-nombre_original.ext
+            $processedPath = $this->ensureCorrectFileName($processedPath, $filePath);
+
             return [
                 'success' => true,
                 'processed_file' => $processedPath,
@@ -187,6 +190,33 @@ class DocumentService {
                 'message' => $e->getMessage()
             ];
         }
+    }
+
+    // Método para asegurar el nombre correcto del archivo
+    private function ensureCorrectFileName($processedPath, $originalPath) {
+        $processedName = basename($processedPath);
+        
+        // Si el nombre ya tiene el formato ID-nombre.ext, usarlo tal cual
+        if (preg_match('/^\d+-/', $processedName)) {
+            return $processedPath;
+        }
+        
+        // Obtener el nombre original sin extensión
+        $originalNameWithoutExt = pathinfo(basename($originalPath), PATHINFO_FILENAME);
+        
+        // Generar ID único
+        $uniqueId = uniqid();
+        
+        // Crear nuevo nombre: ID-OriginalName.ext
+        $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.' . pathinfo($processedName, PATHINFO_EXTENSION);
+        
+        // Renombrar el archivo
+        $newPath = dirname($processedPath) . '/' . $newFileName;
+        if (rename($processedPath, $newPath)) {
+            return $newPath;
+        }
+        
+        return $processedPath;
     }
 
     public function getAllDocuments() {

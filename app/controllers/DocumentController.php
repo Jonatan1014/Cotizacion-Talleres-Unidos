@@ -326,9 +326,21 @@ class DocumentController {
             return;
         }
 
+        // Asegurar que el nombre tenga el formato ID-nombre_original.ext
+        $processedFilePath = $this->ensureCorrectFileName($processedFilePath);
+
         // Establecer headers para la descarga
         $mimeType = mime_content_type($processedFilePath);
         $fileName = basename($processedFilePath);
+        
+        // Forzar MIME type correcto para imágenes si es necesario
+        if ($mimeType === 'application/octet-stream') {
+            if (strtolower(pathinfo($fileName, PATHINFO_EXTENSION)) === 'png') {
+                $mimeType = 'image/png';
+            } elseif (strtolower(pathinfo($fileName, PATHINFO_EXTENSION)) === 'jpg' || strtolower(pathinfo($fileName, PATHINFO_EXTENSION)) === 'jpeg') {
+                $mimeType = 'image/jpeg';
+            }
+        }
         
         header('Content-Type: ' . $mimeType);
         header('Content-Disposition: attachment; filename="' . $fileName . '"');
@@ -348,9 +360,21 @@ class DocumentController {
             return;
         }
 
+        // Asegurar que el nombre tenga el formato ID-nombre_original.ext
+        $processedFilePath = $this->ensureCorrectFileName($processedFilePath);
+
         // Establecer headers para devolver binario
         $mimeType = mime_content_type($processedFilePath);
         $fileName = basename($processedFilePath);
+        
+        // Forzar MIME type correcto para imágenes si es necesario
+        if ($mimeType === 'application/octet-stream') {
+            if (strtolower(pathinfo($fileName, PATHINFO_EXTENSION)) === 'png') {
+                $mimeType = 'image/png';
+            } elseif (strtolower(pathinfo($fileName, PATHINFO_EXTENSION)) === 'jpg' || strtolower(pathinfo($fileName, PATHINFO_EXTENSION)) === 'jpeg') {
+                $mimeType = 'image/jpeg';
+            }
+        }
         
         header('Content-Type: application/octet-stream');
         header('Content-Disposition: attachment; filename="' . $fileName . '"');
@@ -361,6 +385,57 @@ class DocumentController {
         // Enviar el archivo binario
         readfile($processedFilePath);
         exit;
+    }
+
+    // Método auxiliar para asegurar el nombre correcto del archivo
+    private function ensureCorrectFileName($processedFilePath) {
+        $originalName = basename($processedFilePath);
+        
+        // Si el nombre ya tiene el formato ID-nombre.ext, usarlo tal cual
+        if (preg_match('/^\d+-/', $originalName)) {
+            return $processedFilePath;
+        }
+        
+        // Extraer el nombre original del archivo original (antes de la transformación)
+        $documentName = $this->getOriginalDocumentName($processedFilePath);
+        
+        if ($documentName) {
+            // Generar ID único
+            $uniqueId = uniqid();
+            
+            // Crear nuevo nombre: ID-OriginalName.ext
+            $newFileName = $uniqueId . '-' . $documentName . '.' . pathinfo($originalName, PATHINFO_EXTENSION);
+            
+            // Renombrar el archivo
+            $newPath = dirname($processedFilePath) . '/' . $newFileName;
+            if (rename($processedFilePath, $newPath)) {
+                return $newPath;
+            }
+        }
+        
+        return $processedFilePath;
+    }
+
+    // Método para obtener el nombre original del documento
+    private function getOriginalDocumentName($processedFilePath) {
+        // Intentar obtener el nombre original del archivo procesado
+        // Buscar el nombre original en el directorio de uploads
+        $processedName = pathinfo(basename($processedFilePath), PATHINFO_FILENAME);
+        
+        // Buscar archivos relacionados en el directorio de uploads
+        $uploadFiles = glob($this->uploadDir . '*');
+        foreach ($uploadFiles as $uploadFile) {
+            if (is_file($uploadFile)) {
+                $uploadFileName = pathinfo(basename($uploadFile), PATHINFO_FILENAME);
+                // Buscar coincidencia parcial
+                if (strpos($uploadFileName, $processedName) !== false || strpos($processedName, $uploadFileName) !== false) {
+                    return pathinfo(basename($uploadFile), PATHINFO_FILENAME);
+                }
+            }
+        }
+        
+        // Si no se encuentra coincidencia, devolver el nombre original sin extensión
+        return pathinfo(basename($processedFilePath), PATHINFO_FILENAME);
     }
 
     private function processDocument() {
