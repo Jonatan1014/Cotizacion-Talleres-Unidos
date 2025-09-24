@@ -16,19 +16,34 @@ class FileConverter {
                 throw new Exception('PDF file does not exist or is not readable: ' . $pdfPath);
             }
 
-            $filename = pathinfo($pdfPath, PATHINFO_FILENAME);
-            $outputPath = $this->processedDir . $filename . '.png';
+            // Obtener el nombre base del archivo original (sin extensión)
+            $originalNameWithoutExt = pathinfo($pdfPath, PATHINFO_FILENAME);
+            
+            // Generar ID único
+            $uniqueId = uniqid();
+            
+            // Contar el número de páginas en el PDF
+            $pageCount = $this->getPdfPageCount($pdfPath);
+            
+            // Si tiene más de 1 página, devolver el archivo sin transformar
+            if ($pageCount > 1) {
+                return $this->returnUnchangedPdf($pdfPath, $uniqueId, $originalNameWithoutExt);
+            }
+            
+            // Crear nuevo nombre: ID-OriginalName.png
+            $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.png';
+            $outputPath = $this->processedDir . $newFileName;
             
             // Convert first page of PDF to PNG
-            $command = "pdftoppm -png -f 1 -l 1 " . escapeshellarg($pdfPath) . " " . escapeshellarg($this->processedDir . $filename) . " 2>&1";
+            $command = "pdftoppm -png -f 1 -l 1 " . escapeshellarg($pdfPath) . " " . escapeshellarg($this->processedDir . $uniqueId . '-' . $originalNameWithoutExt) . " 2>&1";
             exec($command, $output, $returnCode);
             
             if ($returnCode !== 0) {
                 throw new Exception('Failed to convert PDF to PNG. Command: ' . $command . ' Output: ' . implode("\n", $output));
             }
             
-            // Verificar que el archivo se creó
-            $finalPath = $this->processedDir . $filename . '-1.png';
+            // Verificar que el archivo se creó (pdftoppm puede crear con sufijo -1)
+            $finalPath = $this->processedDir . $uniqueId . '-' . $originalNameWithoutExt . '-1.png';
             if (file_exists($finalPath)) {
                 rename($finalPath, $outputPath);
             }
@@ -43,6 +58,41 @@ class FileConverter {
         }
     }
 
+    // Método para contar páginas en un PDF
+    private function getPdfPageCount($pdfPath) {
+        $command = "pdfinfo " . escapeshellarg($pdfPath) . " 2>&1";
+        exec($command, $output, $returnCode);
+        
+        if ($returnCode !== 0) {
+            throw new Exception('Failed to get PDF page count. Command: ' . $command . ' Output: ' . implode("\n", $output));
+        }
+        
+        foreach ($output as $line) {
+            if (strpos($line, 'Pages:') !== false) {
+                preg_match('/Pages:\s*(\d+)/', $line, $matches);
+                if (isset($matches[1])) {
+                    return (int)$matches[1];
+                }
+            }
+        }
+        
+        return 1; // Por defecto, asumir 1 página si no se puede determinar
+    }
+
+    // Método para devolver PDF sin cambios (solo renombrado)
+    private function returnUnchangedPdf($pdfPath, $uniqueId, $originalNameWithoutExt) {
+        // Crear nuevo nombre: ID-OriginalName.pdf
+        $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.pdf';
+        $outputPath = $this->processedDir . $newFileName;
+        
+        // Copiar el archivo original al nuevo nombre
+        if (!copy($pdfPath, $outputPath)) {
+            throw new Exception('Failed to copy PDF file to new name');
+        }
+        
+        return $outputPath;
+    }
+
     public function convertDocxToPdf($docxPath) {
         try {
             // Verificar que el archivo exista y sea legible
@@ -50,8 +100,15 @@ class FileConverter {
                 throw new Exception('DOCX file does not exist or is not readable: ' . $docxPath);
             }
 
-            $filename = pathinfo($docxPath, PATHINFO_FILENAME);
-            $outputPath = $this->processedDir . $filename . '.pdf';
+            // Obtener el nombre base del archivo original (sin extensión)
+            $originalNameWithoutExt = pathinfo($docxPath, PATHINFO_FILENAME);
+            
+            // Generar ID único
+            $uniqueId = uniqid();
+            
+            // Crear nuevo nombre: ID-OriginalName.pdf
+            $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.pdf';
+            $outputPath = $this->processedDir . $newFileName;
             
             // Copiar el archivo a un directorio temporal con permisos correctos
             $tempDir = '/tmp/libreoffice_' . uniqid();
@@ -77,10 +134,12 @@ class FileConverter {
             error_log("LibreOffice output: " . implode("\n", $output));
             error_log("Return code: " . $returnCode);
             
-            // Mover el archivo convertido al directorio final
-            $convertedFile = $tempDir . '/' . $filename . '.pdf';
+            // Mover el archivo convertido al directorio final con el nuevo nombre
+            $originalConvertedName = pathinfo($docxPath, PATHINFO_FILENAME) . '.pdf';
+            $convertedFile = $tempDir . '/' . $originalConvertedName;
             
             if (file_exists($convertedFile)) {
+                // Renombrar al nuevo nombre con ID
                 rename($convertedFile, $outputPath);
                 // Limpiar directorio temporal
                 $this->rrmdir($tempDir);
@@ -107,8 +166,15 @@ class FileConverter {
                 throw new Exception('Excel file does not exist or is not readable: ' . $excelPath);
             }
 
-            $filename = pathinfo($excelPath, PATHINFO_FILENAME);
-            $outputPath = $this->processedDir . $filename . '.pdf';
+            // Obtener el nombre base del archivo original (sin extensión)
+            $originalNameWithoutExt = pathinfo($excelPath, PATHINFO_FILENAME);
+            
+            // Generar ID único
+            $uniqueId = uniqid();
+            
+            // Crear nuevo nombre: ID-OriginalName.pdf
+            $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.pdf';
+            $outputPath = $this->processedDir . $newFileName;
             
             // Copiar el archivo a un directorio temporal con permisos correctos
             $tempDir = '/tmp/libreoffice_' . uniqid();
@@ -129,10 +195,12 @@ class FileConverter {
             $command = "HOME=/tmp timeout 60 xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' libreoffice --headless --invisible --nodefault --nofirststartwizard --nolockcheck --nologo --norestore --convert-to pdf --outdir " . escapeshellarg($tempDir) . " " . escapeshellarg($tempFile) . " 2>&1";
             exec($command, $output, $returnCode);
             
-            // Mover el archivo convertido al directorio final
-            $convertedFile = $tempDir . '/' . $filename . '.pdf';
+            // Mover el archivo convertido al directorio final con el nuevo nombre
+            $originalConvertedName = pathinfo($excelPath, PATHINFO_FILENAME) . '.pdf';
+            $convertedFile = $tempDir . '/' . $originalConvertedName;
             
             if (file_exists($convertedFile)) {
+                // Renombrar al nuevo nombre con ID
                 rename($convertedFile, $outputPath);
                 // Limpiar directorio temporal
                 $this->rrmdir($tempDir);
