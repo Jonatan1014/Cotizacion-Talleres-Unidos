@@ -24,6 +24,9 @@ RUN docker-php-ext-install -j$(nproc) gd zip pdo_mysql
 # Enable Apache modules
 RUN a2enmod rewrite
 
+
+# Copy custom PHP configuration
+COPY ./app/php.ini /usr/local/etc/php/conf.d/custom.ini
 # Configure Apache to serve files from /var/www/html
 COPY ./app /var/www/html
 

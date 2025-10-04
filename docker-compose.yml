@@ -11,5 +11,5 @@ services:
       - ./logs:/var/log/apache2
     environment:
       - WEBHOOK_URL=${WEBHOOK_URL}
-      - UPLOAD_MAX_SIZE=50M
+      - UPLOAD_MAX_SIZE=${UPLOAD_MAX_SIZE}
     restart: unless-stopped
