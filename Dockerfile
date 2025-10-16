@@ -16,8 +16,8 @@ RUN apt-get update && apt-get install -y \
     libreoffice-calc \
     poppler-utils \
     xvfb \
-    unzip \ # Necesario para .zip
-    p7zip-full \ # Instala 7z, útil para .rar y otros formatos
+    unzip \
+    p7zip-full \ 
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
