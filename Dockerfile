@@ -1,6 +1,8 @@
+# Dockerfile
 FROM php:8.1-apache
 
 # Install system dependencies including xvfb for headless LibreOffice
+# Cambiamos unrar y rar por p7zip-full que incluye 7z, útil para varios formatos
 RUN apt-get update && apt-get install -y \
     libzip-dev \
     libpng-dev \
@@ -14,9 +16,8 @@ RUN apt-get update && apt-get install -y \
     libreoffice-calc \
     poppler-utils \
     xvfb \
-    unzip \ 
-    unrar \ 
-    rar \  
+    unzip \ # Necesario para .zip
+    p7zip-full \ # Instala 7z, útil para .rar y otros formatos
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,11 +28,15 @@ RUN docker-php-ext-install -j$(nproc) gd zip pdo_mysql
 # Enable Apache modules
 RUN a2enmod rewrite
 
-
 # Copy custom PHP configuration
 COPY ./app/php.ini /usr/local/etc/php/conf.d/custom.ini
-# Configure Apache to serve files from /var/www/html
-COPY ./app /var/www/html
+
+# Copy application files
+COPY . /var/www/html/
+
+# Install Composer dependencies
+RUN cd /var/www/html && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+RUN cd /var/www/html && composer install --no-dev --optimize-autoloader
 
 # Create directories with proper permissions
 RUN mkdir -p /tmp/libreoffice /var/www/.config/libreoffice
