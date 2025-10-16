@@ -69,6 +69,15 @@ class DocumentController {
                         $this->sendError(405, 'Method not allowed');
                     }
                     break;
+
+                // ENDPOINT: Recepción de .zip o .rar, extracción y procesamiento
+                case '/api/uploads-ziprar':
+                    if ($method === 'POST') {
+                        $this->uploadArchiveAndProcess();
+                    } else {
+                        $this->sendError(405, 'Method not allowed');
+                    }
+                    break;
                 
                 case '/':
                     if ($method === 'GET') {
@@ -383,6 +392,50 @@ class DocumentController {
     private function getDocuments() {
         $documents = $this->documentService->getAllDocuments();
         $this->sendResponse(200, ['documents' => $documents]);
+    }
+
+    // Nuevo: recibir archivo .zip o .rar, extraer y procesar documentos internos
+    private function uploadArchiveAndProcess() {
+        if (!isset($_FILES['archive'])) {
+            $this->sendError(400, 'No archive provided');
+            return;
+        }
+
+        $file = $_FILES['archive'];
+
+        // Validar extensión
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $allowed = ['zip', 'rar'];
+        if (!in_array($ext, $allowed)) {
+            $this->sendError(400, 'Archive type not allowed. Allowed: zip, rar');
+            return;
+        }
+
+        // Limitar tamaño (por ejemplo 100MB)
+        $maxBytes = 100 * 1024 * 1024;
+        $fileSize = $file['size'];
+        if ($fileSize > $maxBytes) {
+            $this->sendError(400, 'Archive size exceeds 100MB limit');
+            return;
+        }
+
+        // Guardar temporalmente en uploads
+        $tmpName = uniqid() . '_' . basename($file['name']);
+        $destPath = $this->uploadDir . $tmpName;
+
+        if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+            $this->sendError(500, 'Failed to save uploaded archive');
+            return;
+        }
+
+        // Delegar al servicio para extraer y procesar
+        $result = $this->documentService->processArchive($destPath);
+
+        if ($result['success']) {
+            $this->sendResponse(200, $result);
+        } else {
+            $this->sendError(400, $result['message']);
+        }
     }
 
     private function healthCheck() {

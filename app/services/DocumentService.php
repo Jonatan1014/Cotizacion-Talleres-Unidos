@@ -207,5 +207,94 @@ class DocumentService {
         
         return $documents;
     }
+
+    // Nuevo: Procesar un archivo .zip o .rar: extraer y procesar los archivos internos
+    public function processArchive($archivePath) {
+        try {
+            if (!file_exists($archivePath) || !is_readable($archivePath)) {
+                throw new Exception('Archive not found or not readable');
+            }
+
+            // Space check: optional
+            $tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ua_extract_' . uniqid();
+            if (!mkdir($tempDir, 0755, true) && !is_dir($tempDir)) {
+                throw new Exception('Failed to create temp dir: ' . $tempDir);
+            }
+
+            // Use UnifiedArchive to open and extract
+            $archive = \wapmorgan\UnifiedArchive\UnifiedArchive::open($archivePath);
+
+            // Check extracted size vs free space
+            $needed = $archive->getOriginalSize();
+            if (disk_free_space($tempDir) !== false && disk_free_space($tempDir) < $needed) {
+                // proceed but warn
+                // throw new Exception('Not enough disk space to extract archive');
+            }
+
+            $extractedCount = $archive->extract($tempDir);
+
+            // Allowed file types inside archive
+            $allowed = ['pdf', 'docx', 'xlsx', 'xlsm'];
+
+            $processedFiles = [];
+
+            // Iterate extracted files
+            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($tempDir));
+            foreach ($it as $file) {
+                if ($file->isFile()) {
+                    $ext = strtolower(pathinfo($file->getFilename(), PATHINFO_EXTENSION));
+                    if (!in_array($ext, $allowed)) {
+                        continue;
+                    }
+
+                    // Respect same size limits (100MB per file)
+                    if ($file->getSize() > 100 * 1024 * 1024) {
+                        continue; // skip too large files
+                    }
+
+                    // Build a fake $_FILES-like array to reuse uploadDocument
+                    $fileInfo = [
+                        'name' => $file->getFilename(),
+                        'type' => mime_content_type($file->getPathname()),
+                        'tmp_name' => $file->getPathname(),
+                        'error' => 0,
+                        'size' => $file->getSize()
+                    ];
+
+                    // Upload (already saved), so flag alreadySaved=true
+                    $uploadResult = $this->uploadDocument($fileInfo, true);
+                    if (!$uploadResult['success']) {
+                        // Skip and continue
+                        continue;
+                    }
+
+                    // Process the uploaded file
+                    $proc = $this->processDocument($uploadResult['document']['file_path']);
+                    if ($proc['success']) {
+                        $processedFiles[] = [
+                            'original' => $uploadResult['document']['file_path'],
+                            'processed' => $proc['processed_file']
+                        ];
+                    }
+                }
+            }
+
+            // Cleanup temp dir
+            $this->rrmdir($tempDir);
+
+            return [
+                'success' => true,
+                'extracted_count' => $extractedCount,
+                'processed_files' => $processedFiles,
+                'message' => 'Archive processed'
+            ];
+
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'message' => 'Archive processing failed: ' . $e->getMessage()
+            ];
+        }
+    }
 }
 ?>
