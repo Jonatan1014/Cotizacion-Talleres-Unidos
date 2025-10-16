@@ -16,9 +16,9 @@ RUN apt-get update && apt-get install -y \
     libreoffice-calc \
     poppler-utils \
     xvfb \
-    unzip \ # Asegura que unzip esté presente (aunque a veces ya está)
-    unrar \ # Agrega unrar para archivos .rar
-    rar \  # Agrega rar también por si acaso
+    unzip \ 
+    unrar \ 
+    rar \  
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
