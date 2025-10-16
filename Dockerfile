@@ -1,8 +1,6 @@
-# Dockerfile
 FROM php:8.1-apache
 
 # Install system dependencies including xvfb for headless LibreOffice
-# Agregamos unrar para manejar archivos .rar
 RUN apt-get update && apt-get install -y \
     libzip-dev \
     libpng-dev \
@@ -29,15 +27,11 @@ RUN docker-php-ext-install -j$(nproc) gd zip pdo_mysql
 # Enable Apache modules
 RUN a2enmod rewrite
 
+
 # Copy custom PHP configuration
 COPY ./app/php.ini /usr/local/etc/php/conf.d/custom.ini
-
-# Copy application files
-COPY . /var/www/html/
-
-# Install Composer dependencies
-RUN cd /var/www/html && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-RUN cd /var/www/html && composer install --no-dev --optimize-autoloader
+# Configure Apache to serve files from /var/www/html
+COPY ./app /var/www/html
 
 # Create directories with proper permissions
 RUN mkdir -p /tmp/libreoffice /var/www/.config/libreoffice
