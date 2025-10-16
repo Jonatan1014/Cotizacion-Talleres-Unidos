@@ -1,7 +1,15 @@
 <?php
+// app/services/DocumentService.php
+
+// Incluir el autoloader de Composer para usar wapmorgan/UnifiedArchive
+require_once __DIR__ . '/../../vendor/autoload.php'; // Ajusta la ruta si composer está en el root del proyecto
+// require_once __DIR__ . '/../vendor/autoload.php'; // Alternativa si composer está en el directorio padre
+
 require_once 'utils/FileConverter.php';
 require_once 'services/WebhookService.php';
 require_once 'models/Document.php';
+
+use wapmorgan\UnifiedArchive\UnifiedArchive; // Importar la clase principal
 
 class DocumentService {
     private $uploadDir;
@@ -41,7 +49,7 @@ class DocumentService {
             $fileName = $alreadySaved ? $file['name'] : $file['name'];
             $fileType = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
             $allowedTypes = ['pdf', 'docx', 'xlsx', 'xlsm'];
-            
+
             if (!in_array($fileType, $allowedTypes)) {
                 throw new Exception('File type not allowed. Allowed types: ' . implode(', ', $allowedTypes));
             }
@@ -89,7 +97,7 @@ class DocumentService {
             // For simplicity, we'll use the file path as ID
             // In a real application, you would query a database
             $filePath = $documentId;
-            
+
             if (!file_exists($filePath)) {
                 throw new Exception('Document not found');
             }
@@ -147,7 +155,7 @@ class DocumentService {
             // For simplicity, we'll use the file path as ID
             // In a real application, you would query a database
             $filePath = $documentId;
-            
+
             if (!file_exists($filePath)) {
                 throw new Exception('Document not found');
             }
@@ -192,7 +200,7 @@ class DocumentService {
     public function getAllDocuments() {
         $documents = [];
         $files = glob($this->uploadDir . '*');
-        
+
         foreach ($files as $file) {
             if (is_file($file)) {
                 $documents[] = [
@@ -204,7 +212,7 @@ class DocumentService {
                 ];
             }
         }
-        
+
         return $documents;
     }
 
@@ -215,78 +223,94 @@ class DocumentService {
                 throw new Exception('Archive not found or not readable');
             }
 
-            // Space check: optional
+            // Abrir el archivo con UnifiedArchive
+            $archive = UnifiedArchive::open($archivePath);
+            if ($archive === null) {
+                throw new Exception('Could not open archive. Format might not be supported or file is corrupted.');
+            }
+
+            // Crear directorio temporal para extracción
             $tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ua_extract_' . uniqid();
             if (!mkdir($tempDir, 0755, true) && !is_dir($tempDir)) {
                 throw new Exception('Failed to create temp dir: ' . $tempDir);
             }
 
-            // Use UnifiedArchive to open and extract
-            $archive = \wapmorgan\UnifiedArchive\UnifiedArchive::open($archivePath);
-
-            // Check extracted size vs free space
+            // Opcional: Verificar espacio disponible antes de extraer
             $needed = $archive->getOriginalSize();
-            if (disk_free_space($tempDir) !== false && disk_free_space($tempDir) < $needed) {
-                // proceed but warn
+            $freeSpace = disk_free_space($tempDir);
+            if ($freeSpace !== false && $needed > $freeSpace) {
+                error_log("Warning: Estimated archive size ($needed) might exceed free space ($freeSpace) in $tempDir");
+                // Puedes optar por lanzar un error aquí también si lo deseas estrictamente
                 // throw new Exception('Not enough disk space to extract archive');
             }
 
+            // Extraer archivos
             $extractedCount = $archive->extract($tempDir);
 
-            // Allowed file types inside archive
+            // Tipos de archivos permitidos dentro del archivo
             $allowed = ['pdf', 'docx', 'xlsx', 'xlsm'];
 
             $processedFiles = [];
+            $skippedFiles = []; // Para rastrear archivos omitidos
 
-            // Iterate extracted files
+            // Iterar sobre los archivos extraídos
             $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($tempDir));
             foreach ($it as $file) {
                 if ($file->isFile()) {
                     $ext = strtolower(pathinfo($file->getFilename(), PATHINFO_EXTENSION));
                     if (!in_array($ext, $allowed)) {
-                        continue;
+                        $skippedFiles[] = $file->getPathname();
+                        continue; // Saltar archivos no permitidos
                     }
 
-                    // Respect same size limits (100MB per file)
-                    if ($file->getSize() > 100 * 1024 * 1024) {
-                        continue; // skip too large files
+                    // Limitar tamaño de archivos individuales (ej. 50MB, como los otros uploads)
+                    $fileSize = $file->getSize();
+                    $maxFileSize = 50 * 1024 * 1024; // 50 MB
+                    if ($fileSize > $maxFileSize) {
+                        $skippedFiles[] = $file->getPathname();
+                        continue; // Saltar archivos demasiado grandes
                     }
 
-                    // Build a fake $_FILES-like array to reuse uploadDocument
+                    // Crear array tipo $_FILES para reutilizar uploadDocument
                     $fileInfo = [
                         'name' => $file->getFilename(),
                         'type' => mime_content_type($file->getPathname()),
                         'tmp_name' => $file->getPathname(),
                         'error' => 0,
-                        'size' => $file->getSize()
+                        'size' => $fileSize
                     ];
 
-                    // Upload (already saved), so flag alreadySaved=true
+                    // Subir archivo (ya está guardado en temp), flag alreadySaved=true
                     $uploadResult = $this->uploadDocument($fileInfo, true);
                     if (!$uploadResult['success']) {
-                        // Skip and continue
-                        continue;
+                        error_log("Error uploading extracted file: " . $file->getPathname() . " - " . $uploadResult['message']);
+                        continue; // Saltar si falla la subida
                     }
 
-                    // Process the uploaded file
+                    // Procesar el archivo subido
                     $proc = $this->processDocument($uploadResult['document']['file_path']);
                     if ($proc['success']) {
                         $processedFiles[] = [
                             'original' => $uploadResult['document']['file_path'],
                             'processed' => $proc['processed_file']
                         ];
+                    } else {
+                        error_log("Error processing extracted file: " . $file->getPathname() . " - " . $proc['message']);
+                        // Opcional: mover el archivo fallido a un directorio de errores o dejarlo
                     }
                 }
             }
 
-            // Cleanup temp dir
+            // Limpiar directorio temporal
             $this->rrmdir($tempDir);
 
             return [
                 'success' => true,
+                'archive_path' => $archivePath,
                 'extracted_count' => $extractedCount,
                 'processed_files' => $processedFiles,
-                'message' => 'Archive processed'
+                'skipped_files' => $skippedFiles, // Incluir archivos omitidos en la respuesta
+                'message' => 'Archive processed successfully. ' . count($processedFiles) . ' files processed, ' . count($skippedFiles) . ' skipped.'
             ];
 
         } catch (Exception $e) {
@@ -294,6 +318,22 @@ class DocumentService {
                 'success' => false,
                 'message' => 'Archive processing failed: ' . $e->getMessage()
             ];
+        }
+    }
+
+    // Función auxiliar para eliminar directorios recursivamente
+    private function rrmdir($dir) {
+        if (is_dir($dir)) {
+            $objects = scandir($dir);
+            foreach ($objects as $object) {
+                if ($object != "." && $object != "..") {
+                    if (is_dir($dir . "/" . $object))
+                        $this->rrmdir($dir . "/" . $object);
+                    else
+                        unlink($dir . "/" . $object);
+                }
+            }
+            rmdir($dir);
         }
     }
 }
