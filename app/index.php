@@ -10,11 +10,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-// Composer autoload (if composer was used to install libs)
-if (file_exists(__DIR__ . '/vendor/autoload.php')) {
-    require_once __DIR__ . '/vendor/autoload.php';
-}
-
 require_once 'controllers/DocumentController.php';
 
 $controller = new DocumentController();
