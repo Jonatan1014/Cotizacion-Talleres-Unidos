@@ -508,7 +508,7 @@ class DocumentController {
         }
 
         // Delegar al servicio para extraer
-        $result = $this->documentService->processArchive($filePath); // <-- Aquí usas processArchive
+        $result = $this->documentService->extractArchive($filePath); // <-- Aquí usas extractArchive
 
         if ($result['success']) {
             $this->sendResponse(200, $result);
