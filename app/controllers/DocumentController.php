@@ -70,7 +70,7 @@ class DocumentController {
                     }
                     break;
 
-                // NUEVO ENDPOINT: Recibir .zip o .rar (multipart), extraer y devolver binarios como multipart
+                // NUEVO ENDPOINT: Recibir .zip o .rar (multipart)
                 case '/api/uploads-ziprar':
                     if ($method === 'POST') {
                         $this->uploadArchiveAndProcess();
@@ -78,16 +78,14 @@ class DocumentController {
                         $this->sendError(405, 'Method not allowed');
                     }
                     break;
-
-                // NUEVO ENDPOINT: Recibir .zip o .rar (binario), extraer y devolver binarios como multipart
-                case '/api/uploads-ziprar/bin': // Añadir este caso
+                // NUEVO ENDPOINT: Recibir .zip o .rar (binario)
+                case '/api/uploads-ziprar/bin':
                     if ($method === 'POST') {
-                         $this->uploadBinaryArchiveAndProcess();
+                        $this->uploadBinaryArchiveAndProcess();
                     } else {
                         $this->sendError(405, 'Method not allowed');
                     }
                     break;
-
                 case '/':
                     if ($method === 'GET') {
                         $this->sendResponse(200, [
@@ -99,8 +97,8 @@ class DocumentController {
                                 'POST /api/documents/transform/bin - Transform document and return (binary)',
                                 'GET /api/health - Health check',
                                 'POST /api/documents/manual - Manual processing (deprecated)',
-                                'POST /api/uploads-ziprar - Upload and extract .zip/.rar, return binaries (multipart)',
-                                'POST /api/uploads-ziprar/bin - Upload and extract .zip/.rar, return binaries (multipart)'
+                                'POST /api/uploads-ziprar - Upload and extract .zip/.rar (multipart)',
+                                'POST /api/uploads-ziprar/bin - Upload and extract .zip/.rar (binary)'
                             ]
                         ]);
                     } else {
@@ -404,7 +402,7 @@ class DocumentController {
         $this->sendResponse(200, ['documents' => $documents]);
     }
 
-    // NUEVO MÉTODO: Recibir archivo .zip o .rar como multipart, extraer y devolver binarios como multipart
+    // NUEVO MÉTODO: Recibir archivo .zip o .rar como multipart y extraer
     private function uploadArchiveAndProcess() {
         if (!isset($_FILES['archive'])) {
             $this->sendError(400, 'No archive provided');
@@ -437,7 +435,7 @@ class DocumentController {
         }
 
         // Delegar al servicio para extraer
-        $result = $this->documentService->extractArchive($destPath); // <- Cambiado a extractArchive
+        $result = $this->documentService->extractArchive($destPath);
 
         if ($result['success']) {
             // Devolver los archivos extraídos como multipart con contenido binario
@@ -447,7 +445,7 @@ class DocumentController {
         }
     }
 
-    // NUEVO MÉTODO: Recibir archivo .zip o .rar como binario, extraer y devolver binarios como multipart
+    // NUEVO MÉTODO: Recibir archivo .zip o .rar como binario y extraer
     private function uploadBinaryArchiveAndProcess() {
         $input = file_get_contents('php://input');
         if (empty($input)) {
@@ -499,7 +497,7 @@ class DocumentController {
         }
 
         // Delegar al servicio para extraer
-        $result = $this->documentService->extractArchive($filePath); // <- Cambiado a extractArchive
+        $result = $this->documentService->extractArchive($filePath);
 
         if ($result['success']) {
             // Devolver los archivos extraídos como multipart con contenido binario
@@ -509,58 +507,48 @@ class DocumentController {
         }
     }
 
-    // Método para enviar archivos extraídos como respuesta multipart con contenido binario
+    // Método para enviar archivos extraídos con contenido binario codificado en base64
     private function sendExtractedFilesAsMultipart($extractionResult) {
         // Limpiar cualquier output buffer previo
         if (ob_get_level()) {
             ob_end_clean();
         }
-
-        $boundary = '----WebKitFormBoundary' . uniqid(); // Generar un límite único
-
-        // Enviar headers para multipart
-        header('Content-Type: multipart/form-data; boundary=' . $boundary);
-        header('Cache-Control: no-cache, must-revalidate');
-
-        // Preparar metadatos como parte del multipart (opcional)
-        $metadata = [
-            'success' => $extractionResult['success'],
+        
+        // Preparar respuesta con archivos individuales
+        $response = [
+            'success' => true,
             'extracted_count' => $extractionResult['extracted_count'],
             'message' => $extractionResult['message'],
             'archive_path' => $extractionResult['archive_path'],
+            'files' => []
         ];
-
-        foreach ($metadata as $key => $value) {
-            echo "--{$boundary}\r\n";
-            echo "Content-Disposition: form-data; name=\"{$key}\"\r\n";
-            echo "Content-Type: text/plain\r\n\r\n";
-            echo $value . "\r\n";
-        }
-
-        // Agregar cada archivo extraído como parte binaria
-        foreach ($extractionResult['files'] as $index => $fileInfo) {
-            $filePath = $fileInfo['path'];
-            $fileName = $fileInfo['name'];
-            $mimeType = $fileInfo['type'];
-
-            if (file_exists($filePath)) {
-                $fileContent = file_get_contents($filePath);
-
-                echo "--{$boundary}\r\n";
-                echo "Content-Disposition: form-data; name=\"file_{$index}\"; filename=\"{$fileName}\"\r\n";
-                echo "Content-Type: {$mimeType}\r\n";
-                echo "Content-Transfer-Encoding: binary\r\n\r\n";
-                echo $fileContent . "\r\n"; // Enviar el contenido binario directamente
+        
+        // Agregar cada archivo con su contenido binario codificado en base64
+        foreach ($extractionResult['files'] as $fileInfo) {
+            $fileData = [
+                'name' => $fileInfo['name'],
+                'relative_path' => $fileInfo['relative_path'],
+                'size' => $fileInfo['size'],
+                'type' => $fileInfo['type'],
+                'extension' => $fileInfo['extension'],
+                'content' => null
+            ];
+            
+            // Leer el contenido del archivo y codificarlo en base64
+            if (file_exists($fileInfo['path'])) {
+                $binaryContent = file_get_contents($fileInfo['path']);
+                $fileData['content'] = base64_encode($binaryContent);
             }
+            
+            $response['files'][] = $fileData;
         }
-
-        // Finalizar el multipart
-        echo "--{$boundary}--\r\n";
-
-        // Salir para evitar que PHP agregue más contenido
+        
+        // Enviar como JSON
+        header('Content-Type: application/json');
+        header('Cache-Control: no-cache, must-revalidate');
+        echo json_encode($response);
         exit;
     }
-
 
     private function healthCheck() {
         $this->sendResponse(200, [
