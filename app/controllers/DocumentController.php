@@ -507,79 +507,46 @@ class DocumentController {
         }
     }
 
-    // Método para enviar archivos extraídos como multipart/form-data con contenido binario
+    // Método para enviar archivos extraídos con contenido binario codificado en base64
     private function sendExtractedFilesAsMultipart($extractionResult) {
-        // Crear boundary único para multipart
-        $boundary = '----WebKitFormBoundary' . uniqid();
-        
         // Limpiar cualquier output buffer previo
         if (ob_get_level()) {
             ob_end_clean();
         }
         
-        // Establecer headers
-        header('Content-Type: multipart/form-data; boundary=' . $boundary);
-        header('Cache-Control: no-cache, must-revalidate');
+        // Preparar respuesta con archivos individuales
+        $response = [
+            'success' => true,
+            'extracted_count' => $extractionResult['extracted_count'],
+            'message' => $extractionResult['message'],
+            'archive_path' => $extractionResult['archive_path'],
+            'files' => []
+        ];
         
-        $output = '';
-        
-        // Agregar metadatos generales
-        $output .= "--{$boundary}\r\n";
-        $output .= "Content-Disposition: form-data; name=\"success\"\r\n\r\n";
-        $output .= "true\r\n";
-        
-        $output .= "--{$boundary}\r\n";
-        $output .= "Content-Disposition: form-data; name=\"extracted_count\"\r\n\r\n";
-        $output .= $extractionResult['extracted_count'] . "\r\n";
-        
-        $output .= "--{$boundary}\r\n";
-        $output .= "Content-Disposition: form-data; name=\"message\"\r\n\r\n";
-        $output .= $extractionResult['message'] . "\r\n";
-        
-        // Agregar cada archivo extraído con su contenido binario
-        foreach ($extractionResult['files'] as $index => $fileInfo) {
-            // Agregar metadatos del archivo
-            $output .= "--{$boundary}\r\n";
-            $output .= "Content-Disposition: form-data; name=\"file_{$index}_name\"\r\n\r\n";
-            $output .= $fileInfo['name'] . "\r\n";
+        // Agregar cada archivo con su contenido binario codificado en base64
+        foreach ($extractionResult['files'] as $fileInfo) {
+            $fileData = [
+                'name' => $fileInfo['name'],
+                'relative_path' => $fileInfo['relative_path'],
+                'size' => $fileInfo['size'],
+                'type' => $fileInfo['type'],
+                'extension' => $fileInfo['extension'],
+                'content' => null
+            ];
             
-            $output .= "--{$boundary}\r\n";
-            $output .= "Content-Disposition: form-data; name=\"file_{$index}_relative_path\"\r\n\r\n";
-            $output .= $fileInfo['relative_path'] . "\r\n";
-            
-            $output .= "--{$boundary}\r\n";
-            $output .= "Content-Disposition: form-data; name=\"file_{$index}_size\"\r\n\r\n";
-            $output .= $fileInfo['size'] . "\r\n";
-            
-            $output .= "--{$boundary}\r\n";
-            $output .= "Content-Disposition: form-data; name=\"file_{$index}_type\"\r\n\r\n";
-            $output .= $fileInfo['type'] . "\r\n";
-            
-            $output .= "--{$boundary}\r\n";
-            $output .= "Content-Disposition: form-data; name=\"file_{$index}_extension\"\r\n\r\n";
-            $output .= $fileInfo['extension'] . "\r\n";
-            
-            // Agregar contenido binario del archivo
+            // Leer el contenido del archivo y codificarlo en base64
             if (file_exists($fileInfo['path'])) {
-                $fileContent = file_get_contents($fileInfo['path']);
-                $fileName = $fileInfo['name'];
-                $mimeType = $fileInfo['type'];
-                
-                $output .= "--{$boundary}\r\n";
-                $output .= "Content-Disposition: form-data; name=\"file_{$index}\"; filename=\"{$fileName}\"\r\n";
-                $output .= "Content-Type: {$mimeType}\r\n\r\n";
-                $output .= $fileContent . "\r\n";
+                $binaryContent = file_get_contents($fileInfo['path']);
+                $fileData['content'] = base64_encode($binaryContent);
             }
+            
+            $response['files'][] = $fileData;
         }
         
-        // Cerrar multipart
-        $output .= "--{$boundary}--\r\n";
-        
-        // Establecer longitud del contenido
-        header('Content-Length: ' . strlen($output));
-        
-        // Enviar todo el contenido
-        echo $output;
+        // Enviar como JSON
+        header('Content-Type: application/json');
+        header('Cache-Control: no-cache, must-revalidate');
+        echo json_encode($response);
         exit;
     }
 

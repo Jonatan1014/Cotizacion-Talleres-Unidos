@@ -56,10 +56,10 @@ Uses `wapmorgan/unified-archive` library to extract ZIP/RAR files:
 - `POST /api/documents/transform/bin` - Same, returns binary with `X-File-Name`/`X-File-Type` headers
 
 ### Archive Endpoints
-- `POST /api/uploads-ziprar` - Extract ZIP/RAR and return all extracted files with binary content as multipart/form-data
+- `POST /api/uploads-ziprar` - Extract ZIP/RAR and return all files with binary content encoded in base64
 - `POST /api/uploads-ziprar/bin` - Same as above, binary upload with `X-Filename` header
-- **Important**: These endpoints return extracted files with their binary content in multipart format
-- **Response Format**: multipart/form-data containing metadata and binary content for each extracted file
+- **Important**: These endpoints return JSON with each file's metadata and base64-encoded binary content
+- **Response Format**: JSON array where each file includes `content` field with base64-encoded binary data
 
 ### Binary Upload Pattern
 When `X-Filename` header is missing, system auto-detects extension via MIME type:
