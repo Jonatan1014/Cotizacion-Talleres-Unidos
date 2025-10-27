@@ -32,7 +32,7 @@ RUN a2enmod rewrite
 COPY ./app/php.ini /usr/local/etc/php/conf.d/custom.ini
 
 # Copy application files
-COPY ./app /var/www/html/
+COPY . /var/www/html/
 
 # Install Composer dependencies
 RUN cd /var/www/html && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
