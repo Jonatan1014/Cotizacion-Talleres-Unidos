@@ -2,7 +2,7 @@
 // app/services/DocumentService.php
 
 // Incluir el autoloader de Composer para usar wapmorgan/UnifiedArchive
-require_once __DIR__ . '/../../vendor/autoload.php'; // Ajusta la ruta si composer está en el root del proyecto
+require_once __DIR__ . '/../vendor/autoload.php'; // Ajusta la ruta si composer está en el root del proyecto
 // require_once __DIR__ . '/../vendor/autoload.php'; // Alternativa si composer está en el directorio padre
 
 require_once 'utils/FileConverter.php';
