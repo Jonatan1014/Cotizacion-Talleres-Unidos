@@ -35,6 +35,7 @@ COPY ./app/php.ini /usr/local/etc/php/conf.d/custom.ini
 # Copy application files
 COPY ./app /var/www/html
 
+## asas
 # Install Composer dependencies
 RUN cd /var/www/html && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 RUN cd /var/www/html && composer install --no-dev --optimize-autoloader
