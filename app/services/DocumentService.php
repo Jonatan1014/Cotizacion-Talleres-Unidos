@@ -216,8 +216,8 @@ class DocumentService {
         return $documents;
     }
 
-    // Nuevo: Procesar un archivo .zip o .rar: extraer y procesar los archivos internos
-    public function processArchive($archivePath) {
+    // Nuevo: Extraer archivos de un .zip o .rar sin procesarlos
+    public function extractArchive($archivePath) {
         try {
             if (!file_exists($archivePath) || !is_readable($archivePath)) {
                 throw new Exception('Archive not found or not readable');
@@ -229,94 +229,59 @@ class DocumentService {
                 throw new Exception('Could not open archive. Format might not be supported or file is corrupted.');
             }
 
-            // Crear directorio temporal para extracción
-            $tempDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ua_extract_' . uniqid();
-            if (!mkdir($tempDir, 0755, true) && !is_dir($tempDir)) {
-                throw new Exception('Failed to create temp dir: ' . $tempDir);
+            // Crear directorio de destino para los archivos extraídos
+            $extractDir = $this->uploadDir . 'extracted_' . uniqid() . '/';
+            if (!mkdir($extractDir, 0755, true) && !is_dir($extractDir)) {
+                throw new Exception('Failed to create extraction directory: ' . $extractDir);
             }
 
-            // Opcional: Verificar espacio disponible antes de extraer
+            // Verificar espacio disponible antes de extraer
             $needed = $archive->getOriginalSize();
-            $freeSpace = disk_free_space($tempDir);
+            $freeSpace = disk_free_space($extractDir);
             if ($freeSpace !== false && $needed > $freeSpace) {
-                error_log("Warning: Estimated archive size ($needed) might exceed free space ($freeSpace) in $tempDir");
-                // Puedes optar por lanzar un error aquí también si lo deseas estrictamente
-                // throw new Exception('Not enough disk space to extract archive');
+                $this->rrmdir($extractDir);
+                throw new Exception('Not enough disk space to extract archive');
             }
 
             // Extraer archivos
-            $extractedCount = $archive->extract($tempDir);
+            $extractedCount = $archive->extract($extractDir);
 
-            // Tipos de archivos permitidos dentro del archivo
-            $allowed = ['pdf', 'docx', 'xlsx', 'xlsm'];
-
-            $processedFiles = [];
-            $skippedFiles = []; // Para rastrear archivos omitidos
-
-            // Iterar sobre los archivos extraídos
-            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($tempDir));
-            foreach ($it as $file) {
-                if ($file->isFile()) {
-                    $ext = strtolower(pathinfo($file->getFilename(), PATHINFO_EXTENSION));
-                    if (!in_array($ext, $allowed)) {
-                        $skippedFiles[] = $file->getPathname();
-                        continue; // Saltar archivos no permitidos
-                    }
-
-                    // Limitar tamaño de archivos individuales (ej. 50MB, como los otros uploads)
-                    $fileSize = $file->getSize();
-                    $maxFileSize = 50 * 1024 * 1024; // 50 MB
-                    if ($fileSize > $maxFileSize) {
-                        $skippedFiles[] = $file->getPathname();
-                        continue; // Saltar archivos demasiado grandes
-                    }
-
-                    // Crear array tipo $_FILES para reutilizar uploadDocument
-                    $fileInfo = [
-                        'name' => $file->getFilename(),
-                        'type' => mime_content_type($file->getPathname()),
-                        'tmp_name' => $file->getPathname(),
-                        'error' => 0,
-                        'size' => $fileSize
-                    ];
-
-                    // Subir archivo (ya está guardado en temp), flag alreadySaved=true
-                    $uploadResult = $this->uploadDocument($fileInfo, true);
-                    if (!$uploadResult['success']) {
-                        error_log("Error uploading extracted file: " . $file->getPathname() . " - " . $uploadResult['message']);
-                        continue; // Saltar si falla la subida
-                    }
-
-                    // Procesar el archivo subido
-                    $proc = $this->processDocument($uploadResult['document']['file_path']);
-                    if ($proc['success']) {
-                        $processedFiles[] = [
-                            'original' => $uploadResult['document']['file_path'],
-                            'processed' => $proc['processed_file']
-                        ];
-                    } else {
-                        error_log("Error processing extracted file: " . $file->getPathname() . " - " . $proc['message']);
-                        // Opcional: mover el archivo fallido a un directorio de errores o dejarlo
-                    }
-                }
+            if ($extractedCount === 0) {
+                $this->rrmdir($extractDir);
+                throw new Exception('No files were extracted from the archive');
             }
 
-            // Limpiar directorio temporal
-            $this->rrmdir($tempDir);
+            $extractedFiles = [];
+
+            // Iterar sobre los archivos extraídos
+            $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($extractDir));
+            foreach ($it as $file) {
+                if ($file->isFile()) {
+                    $relativePath = str_replace($extractDir, '', $file->getPathname());
+                    $extractedFiles[] = [
+                        'name' => $file->getFilename(),
+                        'path' => $file->getPathname(),
+                        'relative_path' => $relativePath,
+                        'size' => $file->getSize(),
+                        'type' => mime_content_type($file->getPathname()),
+                        'extension' => strtolower(pathinfo($file->getFilename(), PATHINFO_EXTENSION))
+                    ];
+                }
+            }
 
             return [
                 'success' => true,
                 'archive_path' => $archivePath,
-                'extracted_count' => $extractedCount,
-                'processed_files' => $processedFiles,
-                'skipped_files' => $skippedFiles, // Incluir archivos omitidos en la respuesta
-                'message' => 'Archive processed successfully. ' . count($processedFiles) . ' files processed, ' . count($skippedFiles) . ' skipped.'
+                'extraction_dir' => $extractDir,
+                'extracted_count' => count($extractedFiles),
+                'files' => $extractedFiles,
+                'message' => 'Archive extracted successfully. ' . count($extractedFiles) . ' files extracted.'
             ];
 
         } catch (Exception $e) {
             return [
                 'success' => false,
-                'message' => 'Archive processing failed: ' . $e->getMessage()
+                'message' => 'Archive extraction failed: ' . $e->getMessage()
             ];
         }
     }

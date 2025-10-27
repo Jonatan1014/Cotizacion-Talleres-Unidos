@@ -402,7 +402,7 @@ class DocumentController {
         $this->sendResponse(200, ['documents' => $documents]);
     }
 
-    // NUEVO MÉTODO: Recibir archivo .zip o .rar como multipart y procesar
+    // NUEVO MÉTODO: Recibir archivo .zip o .rar como multipart y extraer
     private function uploadArchiveAndProcess() {
         if (!isset($_FILES['archive'])) {
             $this->sendError(400, 'No archive provided');
@@ -434,17 +434,18 @@ class DocumentController {
             return;
         }
 
-        // Delegar al servicio para extraer y procesar
-        $result = $this->documentService->processArchive($destPath);
+        // Delegar al servicio para extraer
+        $result = $this->documentService->extractArchive($destPath);
 
         if ($result['success']) {
+            // Devolver los archivos extraídos como respuesta
             $this->sendResponse(200, $result);
         } else {
             $this->sendError(400, $result['message']);
         }
     }
 
-    // NUEVO MÉTODO: Recibir archivo .zip o .rar como binario y procesar
+    // NUEVO MÉTODO: Recibir archivo .zip o .rar como binario y extraer
     private function uploadBinaryArchiveAndProcess() {
         $input = file_get_contents('php://input');
         if (empty($input)) {
@@ -495,19 +496,11 @@ class DocumentController {
             return;
         }
 
-        // Crear un array similar al $_FILES para mantener consistencia con el servicio
-        $fileInfo = [
-            'name' => $filename,
-            'type' => mime_content_type($filePath),
-            'tmp_name' => $filePath,
-            'error' => 0,
-            'size' => strlen($input)
-        ];
-
-        // Delegar al servicio para extraer y procesar
-        $result = $this->documentService->processArchive($filePath);
+        // Delegar al servicio para extraer
+        $result = $this->documentService->extractArchive($filePath);
 
         if ($result['success']) {
+            // Devolver los archivos extraídos como respuesta
             $this->sendResponse(200, $result);
         } else {
             $this->sendError(400, $result['message']);
