@@ -43,8 +43,9 @@ Uses `wapmorgan/unified-archive` library to extract ZIP/RAR files:
 - Returns **all extracted files without conversion or processing**
 - No file type restrictions - extracts all files from archive
 - Enforces 100MB limit for archive file size
-- Returns detailed file metadata: name, path, relative_path, size, type, extension
-- Controller sends extracted files as multipart/form-data with binary content
+- Returns detailed file metadata: name, path, relative_path, **url**, size, type, extension
+- **URL generation**: Uses `APP_DOMAIN` environment variable to build public URLs for extracted files
+- Controller sends extracted files as JSON with base64-encoded binary content for each file
 - Does NOT send files to webhook - only returns extraction results directly to client
 
 ## API Endpoints
@@ -77,6 +78,7 @@ $extensions = [
 ### Docker Environment Variables (docker-compose.yml)
 - `WEBHOOK_URL` - Target endpoint for processed files (default: placeholder n8n URL)
 - `UPLOAD_MAX_SIZE` - PHP upload limit (configured in `app/php.ini`)
+- `APP_DOMAIN` - Public domain URL for generating file URLs (e.g., `https://convert-development.systemautomatic.xyz`)
 
 ### Webhook Integration
 `WebhookService` sends multipart/form-data POST with:

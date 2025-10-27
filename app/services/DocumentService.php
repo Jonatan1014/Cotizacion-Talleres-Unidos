@@ -252,16 +252,31 @@ class DocumentService {
             }
 
             $extractedFiles = [];
+            
+            // Obtener el dominio de la aplicación desde variable de entorno
+            $appDomain = getenv('APP_DOMAIN') ?: 'http://localhost';
+            // Remover trailing slash si existe
+            $appDomain = rtrim($appDomain, '/');
 
             // Iterar sobre los archivos extraídos
             $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($extractDir));
             foreach ($it as $file) {
                 if ($file->isFile()) {
                     $relativePath = str_replace($extractDir, '', $file->getPathname());
+                    
+                    // Construir la ruta relativa desde el directorio web root
+                    $webPath = str_replace(__DIR__ . '/../', '', $file->getPathname());
+                    // Normalizar barras a forward slashes
+                    $webPath = str_replace('\\', '/', $webPath);
+                    
+                    // Construir URL completa
+                    $fileUrl = $appDomain . '/' . $webPath;
+                    
                     $extractedFiles[] = [
                         'name' => $file->getFilename(),
                         'path' => $file->getPathname(),
                         'relative_path' => $relativePath,
+                        'url' => $fileUrl,
                         'size' => $file->getSize(),
                         'type' => mime_content_type($file->getPathname()),
                         'extension' => strtolower(pathinfo($file->getFilename(), PATHINFO_EXTENSION))

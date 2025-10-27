@@ -12,4 +12,5 @@ services:
     environment:
       - WEBHOOK_URL=${WEBHOOK_URL}
       - UPLOAD_MAX_SIZE=${UPLOAD_MAX_SIZE}
+      - APP_DOMAIN=${APP_DOMAIN:-http://localhost}
     restart: unless-stopped
