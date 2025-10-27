@@ -438,8 +438,8 @@ class DocumentController {
         $result = $this->documentService->extractArchive($destPath);
 
         if ($result['success']) {
-            // Devolver los archivos extraídos como respuesta
-            $this->sendResponse(200, $result);
+            // Devolver los archivos extraídos como multipart con contenido binario
+            $this->sendExtractedFilesAsMultipart($result);
         } else {
             $this->sendError(400, $result['message']);
         }
@@ -500,13 +500,88 @@ class DocumentController {
         $result = $this->documentService->extractArchive($filePath);
 
         if ($result['success']) {
-            // Devolver los archivos extraídos como respuesta
-            $this->sendResponse(200, $result);
+            // Devolver los archivos extraídos como multipart con contenido binario
+            $this->sendExtractedFilesAsMultipart($result);
         } else {
             $this->sendError(400, $result['message']);
         }
     }
 
+    // Método para enviar archivos extraídos como multipart/form-data con contenido binario
+    private function sendExtractedFilesAsMultipart($extractionResult) {
+        // Crear boundary único para multipart
+        $boundary = '----WebKitFormBoundary' . uniqid();
+        
+        // Limpiar cualquier output buffer previo
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Establecer headers
+        header('Content-Type: multipart/form-data; boundary=' . $boundary);
+        header('Cache-Control: no-cache, must-revalidate');
+        
+        $output = '';
+        
+        // Agregar metadatos generales
+        $output .= "--{$boundary}\r\n";
+        $output .= "Content-Disposition: form-data; name=\"success\"\r\n\r\n";
+        $output .= "true\r\n";
+        
+        $output .= "--{$boundary}\r\n";
+        $output .= "Content-Disposition: form-data; name=\"extracted_count\"\r\n\r\n";
+        $output .= $extractionResult['extracted_count'] . "\r\n";
+        
+        $output .= "--{$boundary}\r\n";
+        $output .= "Content-Disposition: form-data; name=\"message\"\r\n\r\n";
+        $output .= $extractionResult['message'] . "\r\n";
+        
+        // Agregar cada archivo extraído con su contenido binario
+        foreach ($extractionResult['files'] as $index => $fileInfo) {
+            // Agregar metadatos del archivo
+            $output .= "--{$boundary}\r\n";
+            $output .= "Content-Disposition: form-data; name=\"file_{$index}_name\"\r\n\r\n";
+            $output .= $fileInfo['name'] . "\r\n";
+            
+            $output .= "--{$boundary}\r\n";
+            $output .= "Content-Disposition: form-data; name=\"file_{$index}_relative_path\"\r\n\r\n";
+            $output .= $fileInfo['relative_path'] . "\r\n";
+            
+            $output .= "--{$boundary}\r\n";
+            $output .= "Content-Disposition: form-data; name=\"file_{$index}_size\"\r\n\r\n";
+            $output .= $fileInfo['size'] . "\r\n";
+            
+            $output .= "--{$boundary}\r\n";
+            $output .= "Content-Disposition: form-data; name=\"file_{$index}_type\"\r\n\r\n";
+            $output .= $fileInfo['type'] . "\r\n";
+            
+            $output .= "--{$boundary}\r\n";
+            $output .= "Content-Disposition: form-data; name=\"file_{$index}_extension\"\r\n\r\n";
+            $output .= $fileInfo['extension'] . "\r\n";
+            
+            // Agregar contenido binario del archivo
+            if (file_exists($fileInfo['path'])) {
+                $fileContent = file_get_contents($fileInfo['path']);
+                $fileName = $fileInfo['name'];
+                $mimeType = $fileInfo['type'];
+                
+                $output .= "--{$boundary}\r\n";
+                $output .= "Content-Disposition: form-data; name=\"file_{$index}\"; filename=\"{$fileName}\"\r\n";
+                $output .= "Content-Type: {$mimeType}\r\n\r\n";
+                $output .= $fileContent . "\r\n";
+            }
+        }
+        
+        // Cerrar multipart
+        $output .= "--{$boundary}--\r\n";
+        
+        // Establecer longitud del contenido
+        header('Content-Length: ' . strlen($output));
+        
+        // Enviar todo el contenido
+        echo $output;
+        exit;
+    }
 
     private function healthCheck() {
         $this->sendResponse(200, [

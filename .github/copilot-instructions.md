@@ -44,7 +44,8 @@ Uses `wapmorgan/unified-archive` library to extract ZIP/RAR files:
 - No file type restrictions - extracts all files from archive
 - Enforces 100MB limit for archive file size
 - Returns detailed file metadata: name, path, relative_path, size, type, extension
-- Does NOT send files to webhook - only returns extraction results
+- Controller sends extracted files as multipart/form-data with binary content
+- Does NOT send files to webhook - only returns extraction results directly to client
 
 ## API Endpoints
 
@@ -55,9 +56,10 @@ Uses `wapmorgan/unified-archive` library to extract ZIP/RAR files:
 - `POST /api/documents/transform/bin` - Same, returns binary with `X-File-Name`/`X-File-Type` headers
 
 ### Archive Endpoints
-- `POST /api/uploads-ziprar` - Extract ZIP/RAR and return all extracted files as JSON (multipart)
+- `POST /api/uploads-ziprar` - Extract ZIP/RAR and return all extracted files with binary content as multipart/form-data
 - `POST /api/uploads-ziprar/bin` - Same as above, binary upload with `X-Filename` header
-- **Important**: These endpoints DO NOT convert files or send to webhook - only extract and return file list
+- **Important**: These endpoints return extracted files with their binary content in multipart format
+- **Response Format**: multipart/form-data containing metadata and binary content for each extracted file
 
 ### Binary Upload Pattern
 When `X-Filename` header is missing, system auto-detects extension via MIME type:
