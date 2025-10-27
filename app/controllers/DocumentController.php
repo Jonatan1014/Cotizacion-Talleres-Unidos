@@ -445,7 +445,7 @@ class DocumentController {
         }
     }
 
-    // NUEVO MÉTODO: Recibir archivo .zip o .rar como binario y extraer
+        // NUEVO MÉTODO: Recibir archivo .zip o .rar como binario y procesar
     private function uploadBinaryArchiveAndProcess() {
         $input = file_get_contents('php://input');
         if (empty($input)) {
@@ -462,22 +462,33 @@ class DocumentController {
              // Intentar determinar el tipo de archivo por su contenido (opcional, más robusto)
              $finfo = new finfo(FILEINFO_MIME_TYPE);
              $mimeType = $finfo->buffer($input);
-             $validMimeTypes = [
-                 'application/zip' => 'zip',
-                 'application/x-rar-compressed' => 'rar',
-                 'application/vnd.rar' => 'rar' // Otro posible mime para rar
+
+             // Definir los MIME Types permitidos de forma más flexible
+             $allowedMimeTypes = [
+                 'application/zip', // Para .zip
+                 'application/x-rar-compressed', // Para .rar (común)
+                 'application/vnd.rar', // Para .rar (otro común)
+                 'application/x-rar', // Otra variante posible
+                 'application/rar',   // Otra variante posible
+                 // Puedes agregar más si encuentras otros tipos comunes
              ];
-             if (isset($validMimeTypes[$mimeType])) {
-                 $detectedExt = $validMimeTypes[$mimeType];
-                 if ($ext === '' || !in_array($ext, ['zip', 'rar'])) {
-                     // Asignar extensión detectada si no tenía o era inválida
-                     $filename .= '.' . $detectedExt;
-                     $ext = $detectedExt;
+
+             // Verificar si el MIME Type está en la lista permitida
+             if (in_array($mimeType, $allowedMimeTypes)) {
+                 // Asignar extensión según el MIME Type
+                 if ($mimeType === 'application/zip') {
+                     $ext = 'zip';
+                 } else {
+                     // Para cualquier otro MIME Type permitido, asumimos que es rar
+                     $ext = 'rar';
                  }
-             }
-             // Si después de intentar detectar, aún no es válida, error
-             if (!in_array($ext, ['zip', 'rar'])) {
-                 $this->sendError(400, 'Archive type not allowed or could not be determined. Allowed: zip, rar');
+                 // Asignar la extensión al nombre del archivo si no la tenía
+                 if ($ext !== '') {
+                     $filename .= '.' . $ext;
+                 }
+             } else {
+                 // Si no coincide con ningún MIME Type permitido, lanzar error
+                 $this->sendError(400, 'Archive type not allowed or could not be determined. Allowed: zip, rar. Detected MIME: ' . $mimeType);
                  return;
              }
         }
@@ -497,11 +508,10 @@ class DocumentController {
         }
 
         // Delegar al servicio para extraer
-        $result = $this->documentService->extractArchive($filePath);
+        $result = $this->documentService->processArchive($filePath); // <-- Aquí usas processArchive
 
         if ($result['success']) {
-            // Devolver los archivos extraídos como multipart con contenido binario
-            $this->sendExtractedFilesAsMultipart($result);
+            $this->sendResponse(200, $result);
         } else {
             $this->sendError(400, $result['message']);
         }
