@@ -3,7 +3,7 @@ version: '3.8'
 services:
   app:
     build: .
-    container_name: document-processor
+    container_name: document-processorv2
     ports:
       - "80:80"
     volumes:
