@@ -13,10 +13,10 @@ services:
       - ./app/uploads:/app/app/uploads
       - ./logs:/app/logs
     environment:
-      - APP_DOMAIN=${APP_DOMAIN:-http://localhost:8000}
-      - UPLOAD_MAX_SIZE=${UPLOAD_MAX_SIZE:-52428800}
-      - ARCHIVE_MAX_SIZE=${ARCHIVE_MAX_SIZE:-104857600}
-      - CONVERSION_TIMEOUT=${CONVERSION_TIMEOUT:-60}
+      - APP_DOMAIN=${APP_DOMAIN}
+      - UPLOAD_MAX_SIZE=${UPLOAD_MAX_SIZE}
+      - ARCHIVE_MAX_SIZE=${ARCHIVE_MAX_SIZE}
+      - CONVERSION_TIMEOUT=${CONVERSION_TIMEOUT}
     env_file:
       - .env
     restart: unless-stopped
