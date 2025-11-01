@@ -1,13 +1,8 @@
-# Dockerfile
-FROM php:8.1-apache
+# Dockerfile - API de Procesamiento de Documentos con FastAPI
+FROM python:3.11-slim
 
-# Install system dependencies including xvfb for headless LibreOffice
-# Cambiamos unrar y rar por p7zip-full que incluye 7z, útil para varios formatos
+# Instalar dependencias del sistema para conversión de documentos
 RUN apt-get update && apt-get install -y \
-    libzip-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
     ghostscript \
     libreoffice \
     libreoffice-core \
@@ -17,34 +12,39 @@ RUN apt-get update && apt-get install -y \
     poppler-utils \
     xvfb \
     unzip \
-    p7zip-full \ 
+    unrar \
+    p7zip-full \
+    libmagic1 \
+    fonts-liberation \
+    fonts-dejavu-core \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg
-RUN docker-php-ext-install -j$(nproc) gd zip pdo_mysql
+# Establecer directorio de trabajo
+WORKDIR /app
 
-# Enable Apache modules
-RUN a2enmod rewrite
+# Copiar archivo de requisitos
+COPY requirements.txt .
 
-# Copy custom PHP configuration
-COPY ./app/php.ini /usr/local/etc/php/conf.d/custom.ini
+# Instalar dependencias de Python
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
-COPY ./app /var/www/html
+# Copiar archivos de la aplicación
+COPY app/ ./app/
+COPY .env .env
 
-# Install Composer dependencies
-RUN cd /var/www/html && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-RUN cd /var/www/html && composer install --no-dev --optimize-autoloader
+# Crear directorios de carga con permisos apropiados
+RUN mkdir -p /app/app/uploads /app/app/uploads/processed /tmp/libreoffice
+RUN chmod -R 777 /app/app/uploads /tmp
 
-# Create directories with proper permissions
-RUN mkdir -p /tmp/libreoffice /var/www/.config/libreoffice
-RUN chown -R www-data:www-data /var/www/html /tmp/libreoffice
-RUN chmod -R 777 /tmp
+# Exponer puerto para FastAPI
+EXPOSE 8000
 
-# Expose port
-EXPOSE 80
+# Establecer variables de entorno
+ENV PYTHONUNBUFFERED=1
+ENV HOME=/tmp
+ENV PYTHONPATH=/app
 
-# Start Apache
-CMD ["apache2-foreground"]
+# Ejecutar FastAPI con uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

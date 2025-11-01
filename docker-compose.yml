@@ -1,16 +1,28 @@
 version: '3.8'
 
 services:
-  app:
-    build: .
-    container_name: document-processorv2
+  api-procesamiento-documentos:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: api-procesamiento-documentos
     ports:
-      - "80:80"
+      - "8000:8000"
     volumes:
-      - ./app:/var/www/html
-      - ./logs:/var/log/apache2
+      - ./app:/app/app
+      - ./app/uploads:/app/app/uploads
+      - ./logs:/app/logs
     environment:
-      - WEBHOOK_URL=${WEBHOOK_URL}
-      - UPLOAD_MAX_SIZE=${UPLOAD_MAX_SIZE}
-      - APP_DOMAIN=${APP_DOMAIN:-http://localhost}
+      - APP_DOMAIN=${APP_DOMAIN:-http://localhost:8000}
+      - UPLOAD_MAX_SIZE=${UPLOAD_MAX_SIZE:-52428800}
+      - ARCHIVE_MAX_SIZE=${ARCHIVE_MAX_SIZE:-104857600}
+      - CONVERSION_TIMEOUT=${CONVERSION_TIMEOUT:-60}
+    env_file:
+      - .env
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
