@@ -7,3 +7,4 @@ pydantic-settings==2.1.0
 python-magic==0.4.27
 patool==1.12
 pyunpack==0.3
+aspose-zip==23.12.0

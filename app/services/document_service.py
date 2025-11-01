@@ -187,21 +187,41 @@ class DocumentService:
             os.makedirs(extract_dir, exist_ok=True)
             
             try:
-                # Detectar tipo de archivo
+                # Detectar tipo de archivo por extensión
                 ext = Path(archive_path).suffix.lower()
                 
+                print(f"[DEBUG] Archivo a extraer: {archive_path}")
+                print(f"[DEBUG] Extensión detectada: {ext}")
+                
                 if ext == '.rar':
-                    # Usar unar para archivos RAR (mejor compatibilidad)
-                    result = subprocess.run(
-                        ['unar', '-no-directory', '-o', extract_dir, archive_path],
-                        capture_output=True,
-                        text=True,
-                        timeout=120
-                    )
-                    if result.returncode != 0:
-                        raise Exception(f'Error al extraer RAR: {result.stderr}')
+                    # Intentar usar aspose-zip si está disponible (mejor compatibilidad con RAR)
+                    try:
+                        import aspose.zip as az
+                        try:
+                            print(f"[DEBUG] Usando aspose.zip para extraer RAR")
+                            with az.rar.RarArchive(archive_path) as archive:
+                                archive.extract_to_directory(extract_dir)
+                        except Exception as e_aspose:
+                            # Si aspose falla, intentar fallback a unar
+                            print(f"[DEBUG] Aspose fallo: {e_aspose}")
+                            raise
+                    except ImportError:
+                        # Aspose no está instalado -> fallback a unar
+                        print(f"[DEBUG] aspose.zip no disponible, usando unar para extraer RAR")
+                        result = subprocess.run(
+                            ['unar', '-no-directory', '-o', extract_dir, archive_path],
+                            capture_output=True,
+                            text=True,
+                            timeout=120
+                        )
+                        print(f"[DEBUG] unar return code: {result.returncode}")
+                        print(f"[DEBUG] unar stdout: {result.stdout}")
+                        print(f"[DEBUG] unar stderr: {result.stderr}")
+                        if result.returncode != 0:
+                            raise Exception(f'Error al extraer RAR con unar: {result.stderr}')
                 else:
                     # Usar pyunpack para otros formatos (ZIP, 7Z, etc.)
+                    print(f"[DEBUG] Usando pyunpack para extraer {ext}")
                     Archive(archive_path).extractall(extract_dir)
                     
             except FileNotFoundError as e:
