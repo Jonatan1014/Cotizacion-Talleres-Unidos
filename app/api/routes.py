@@ -232,6 +232,7 @@ async def upload_archive_and_extract(archive: UploadFile = File(...)):
     """
     content = await archive.read()
     
+    # Obtener extensión del archivo
     ext = Path(archive.filename).suffix.lower().lstrip('.')
     if ext not in settings.allowed_archive_types:
         raise HTTPException(
@@ -246,7 +247,8 @@ async def upload_archive_and_extract(archive: UploadFile = File(...)):
         )
     
     import uuid
-    temp_filename = f"{uuid.uuid4().hex}_{archive.filename}"
+    # Preservar la extensión original en el nombre temporal
+    temp_filename = f"archive_{uuid.uuid4().hex}.{ext}"
     temp_path = os.path.join(settings.upload_dir, temp_filename)
     
     with open(temp_path, 'wb') as f:
@@ -273,12 +275,21 @@ async def upload_binary_archive_and_extract(
     if not content:
         raise HTTPException(status_code=400, detail="No se proporcionaron datos del archivo")
     
+    # Obtener extensión del archivo o usar .zip por defecto
     filename = x_filename or f'archive_{os.urandom(8).hex()}.zip'
     
     ext = Path(filename).suffix.lower().lstrip('.')
-    if ext not in settings.allowed_archive_types:
-        ext = 'zip'
-        filename += f'.{ext}'
+    if not ext or ext not in settings.allowed_archive_types:
+        # Si no hay extensión o no es válida, intentar detectar por contenido
+        # Los archivos RAR empiezan con "Rar!" (0x52 0x61 0x72 0x21)
+        if content[:4] == b'Rar!':
+            ext = 'rar'
+        # Los archivos ZIP empiezan con "PK" (0x50 0x4B)
+        elif content[:2] == b'PK':
+            ext = 'zip'
+        else:
+            ext = 'zip'  # fallback
+        filename = f'archive_{os.urandom(8).hex()}.{ext}'
     
     if len(content) > settings.archive_max_size:
         raise HTTPException(

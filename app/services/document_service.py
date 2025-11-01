@@ -10,6 +10,7 @@ Lógica principal para el procesamiento de documentos:
 import os
 import uuid
 import shutil
+import subprocess
 import mimetypes
 import base64
 from datetime import datetime
@@ -186,23 +187,42 @@ class DocumentService:
             os.makedirs(extract_dir, exist_ok=True)
             
             try:
-                # Extraer archivo usando pyunpack
-                Archive(archive_path).extractall(extract_dir)
+                # Detectar tipo de archivo
+                ext = Path(archive_path).suffix.lower()
+                
+                if ext == '.rar':
+                    # Usar unar para archivos RAR (mejor compatibilidad)
+                    result = subprocess.run(
+                        ['unar', '-no-directory', '-o', extract_dir, archive_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=120
+                    )
+                    if result.returncode != 0:
+                        raise Exception(f'Error al extraer RAR: {result.stderr}')
+                else:
+                    # Usar pyunpack para otros formatos (ZIP, 7Z, etc.)
+                    Archive(archive_path).extractall(extract_dir)
+                    
+            except FileNotFoundError as e:
+                shutil.rmtree(extract_dir, ignore_errors=True)
+                if 'unar' in str(e):
+                    raise Exception(
+                        'Para extraer archivos RAR necesitas instalar unar:\n'
+                        'Linux: sudo apt-get install unar\n'
+                        'macOS: brew install unar\n'
+                        'Alternativamente, convierte el archivo a .zip que sí está soportado.'
+                    )
+                raise Exception(f'Herramienta de extracción no encontrada: {str(e)}')
             except Exception as e:
                 shutil.rmtree(extract_dir, ignore_errors=True)
                 error_msg = str(e)
                 
-                # Mensaje específico para archivos RAR
-                if 'patool' in error_msg.lower():
-                    ext = Path(archive_path).suffix.lower()
-                    if ext == '.rar':
-                        raise Exception(
-                            'Para extraer archivos RAR necesitas instalar UnRAR en tu sistema:\n'
-                            'Windows: Descarga WinRAR de https://www.win-rar.com/download.html\n'
-                            'Linux: sudo apt-get install unrar\n'
-                            'macOS: brew install unrar\n'
-                            'Alternativamente, convierte el archivo a .zip que sí está soportado.'
-                        )
+                # Mensaje específico para archivos RAR con patool
+                if 'patool' in error_msg.lower() and 'rar' in Path(archive_path).suffix.lower():
+                    raise Exception(
+                        'Error al extraer archivo RAR. Intenta con formato ZIP o verifica el archivo.'
+                    )
                 
                 raise Exception(f'No se pudo extraer el archivo: {error_msg}')
             
