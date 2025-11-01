@@ -3,21 +3,21 @@ FROM python:3.11-slim
 
 # Instalar dependencias del sistema para conversión de documentos
 RUN apt-get update && apt-get install -y \
-    ghostscript \
-    libreoffice \
-    libreoffice-core \
-    libreoffice-common \
-    libreoffice-writer \
-    libreoffice-calc \
-    poppler-utils \
-    xvfb \
-    unzip \
-    unrar \
-    p7zip-full \
-    libmagic1 \
-    fonts-liberation \
-    fonts-dejavu-core \
     curl \
+    fonts-dejavu-core \
+    fonts-liberation \
+    ghostscript \
+    libmagic1 \
+    libreoffice \
+    libreoffice-calc \
+    libreoffice-common \
+    libreoffice-core \
+    libreoffice-writer \
+    p7zip-full \
+    poppler-utils \
+    unar \
+    unzip \
+    xvfb \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
