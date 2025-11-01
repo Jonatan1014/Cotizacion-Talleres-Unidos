@@ -232,12 +232,54 @@ async def upload_archive_and_extract(archive: UploadFile = File(...)):
     """
     content = await archive.read()
     
-    # Obtener extensión del archivo
-    ext = Path(archive.filename).suffix.lower().lstrip('.')
+    # Log del archivo recibido para debugging
+    print(f"[DEBUG] Archivo recibido: {archive.filename}")
+    print(f"[DEBUG] Content-Type: {archive.content_type}")
+    print(f"[DEBUG] Tamaño: {len(content)} bytes")
+    print(f"[DEBUG] Magic bytes (primeros 10): {content[:10]}")
+    
+    # Detectar tipo PRIMERO por magic bytes (más confiable que la extensión)
+    detected_ext = None
+    if content[:4] == b'Rar!':
+        detected_ext = 'rar'
+        print("[DEBUG] Detectado como RAR por magic bytes (Rar!)")
+    elif content[:2] == b'PK':
+        detected_ext = 'zip'
+        print("[DEBUG] Detectado como ZIP por magic bytes (PK)")
+    
+    # Obtener extensión del nombre del archivo
+    filename_clean = archive.filename.strip() if archive.filename else ''
+    original_ext = Path(filename_clean).suffix.lower().lstrip('.') if filename_clean else None
+    print(f"[DEBUG] Extensión del nombre de archivo: {original_ext}")
+    
+    # Prioridad: magic bytes > nombre archivo > fallback
+    if detected_ext and detected_ext in settings.allowed_archive_types:
+        ext = detected_ext
+        print(f"[DEBUG] Usando extensión detectada por magic bytes: {ext}")
+    elif original_ext and original_ext in settings.allowed_archive_types:
+        ext = original_ext
+        print(f"[DEBUG] Usando extensión del nombre de archivo: {ext}")
+    else:
+        # Si no se detectó nada válido, intentar con lo detectado aunque no esté en la lista
+        if detected_ext:
+            ext = detected_ext
+            print(f"[DEBUG] Usando extensión detectada (no validada): {ext}")
+        elif original_ext:
+            ext = original_ext
+            print(f"[DEBUG] Usando extensión del archivo (no validada): {ext}")
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo determinar el tipo de archivo"
+            )
+    
+    print(f"[DEBUG] Extensión final usada: {ext}")
+    
+    # Validar que la extensión final esté permitida
     if ext not in settings.allowed_archive_types:
         raise HTTPException(
             status_code=400,
-            detail=f"Tipo de archivo no permitido. Permitidos: {', '.join(settings.allowed_archive_types)}"
+            detail=f"Tipo de archivo no permitido. Detectado: {ext}. Permitidos: {', '.join(settings.allowed_archive_types)}"
         )
     
     if len(content) > settings.archive_max_size:
@@ -247,9 +289,11 @@ async def upload_archive_and_extract(archive: UploadFile = File(...)):
         )
     
     import uuid
-    # Preservar la extensión original en el nombre temporal
+    # Preservar la extensión detectada en el nombre temporal
     temp_filename = f"archive_{uuid.uuid4().hex}.{ext}"
     temp_path = os.path.join(settings.upload_dir, temp_filename)
+    
+    print(f"[DEBUG] Guardando archivo como: {temp_path}")
     
     with open(temp_path, 'wb') as f:
         f.write(content)
@@ -275,21 +319,48 @@ async def upload_binary_archive_and_extract(
     if not content:
         raise HTTPException(status_code=400, detail="No se proporcionaron datos del archivo")
     
-    # Obtener extensión del archivo o usar .zip por defecto
-    filename = x_filename or f'archive_{os.urandom(8).hex()}.zip'
+    # Log para debugging
+    print(f"[DEBUG BIN] Header X-Filename: {x_filename}")
+    print(f"[DEBUG BIN] Tamaño contenido: {len(content)} bytes")
+    print(f"[DEBUG BIN] Magic bytes (primeros 10): {content[:10]}")
     
-    ext = Path(filename).suffix.lower().lstrip('.')
-    if not ext or ext not in settings.allowed_archive_types:
-        # Si no hay extensión o no es válida, intentar detectar por contenido
-        # Los archivos RAR empiezan con "Rar!" (0x52 0x61 0x72 0x21)
-        if content[:4] == b'Rar!':
-            ext = 'rar'
-        # Los archivos ZIP empiezan con "PK" (0x50 0x4B)
-        elif content[:2] == b'PK':
-            ext = 'zip'
+    # Detectar tipo PRIMERO por magic bytes (más confiable)
+    detected_ext = None
+    if content[:4] == b'Rar!':
+        detected_ext = 'rar'
+        print("[DEBUG BIN] Detectado como RAR por magic bytes (Rar!)")
+    elif content[:2] == b'PK':
+        detected_ext = 'zip'
+        print("[DEBUG BIN] Detectado como ZIP por magic bytes (PK)")
+    
+    # Si hay X-Filename, obtener su extensión
+    header_ext = None
+    if x_filename:
+        header_ext = Path(x_filename).suffix.lower().lstrip('.')
+        print(f"[DEBUG BIN] Extensión del header: {header_ext}")
+    
+    # Prioridad: magic bytes > header > fallback zip
+    if detected_ext and detected_ext in settings.allowed_archive_types:
+        ext = detected_ext
+        print(f"[DEBUG BIN] Usando extensión detectada por magic bytes: {ext}")
+    elif header_ext and header_ext in settings.allowed_archive_types:
+        ext = header_ext
+        print(f"[DEBUG BIN] Usando extensión del header: {ext}")
+    else:
+        # Si no se detectó nada válido, hacer último intento con magic bytes sin validar
+        if detected_ext:
+            ext = detected_ext
+            print(f"[DEBUG BIN] Usando extensión detectada (no validada): {ext}")
         else:
-            ext = 'zip'  # fallback
-        filename = f'archive_{os.urandom(8).hex()}.{ext}'
+            ext = 'zip'  # último fallback
+            print(f"[DEBUG BIN] Usando fallback: {ext}")
+    
+    # Validar que la extensión final esté permitida
+    if ext not in settings.allowed_archive_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tipo de archivo no permitido. Detectado: {ext}. Permitidos: {', '.join(settings.allowed_archive_types)}"
+        )
     
     if len(content) > settings.archive_max_size:
         raise HTTPException(
@@ -297,7 +368,11 @@ async def upload_binary_archive_and_extract(
             detail=f"El tamaño del archivo excede el límite de {settings.archive_max_size // (1024*1024)}MB"
         )
     
+    # Generar nombre de archivo con extensión correcta
+    filename = f'archive_{os.urandom(8).hex()}.{ext}'
     temp_path = os.path.join(settings.upload_dir, filename)
+    
+    print(f"[DEBUG BIN] Guardando archivo como: {temp_path}")
     
     with open(temp_path, 'wb') as f:
         f.write(content)
