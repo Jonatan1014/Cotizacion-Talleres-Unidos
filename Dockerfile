@@ -3,13 +3,16 @@ FROM python:3.11-slim
 
 # Instalar dependencias del sistema para conversión de documentos
 # Nota: libicu-dev proporciona las bibliotecas ICU necesarias para aspose-zip
+# libssl3 y ca-certificates son necesarios para las operaciones de cifrado de aspose-zip
 RUN apt-get update && apt-get install -y \
+    ca-certificates \
     curl \
     fonts-dejavu-core \
     fonts-liberation \
     ghostscript \
     libicu-dev \
     libmagic1 \
+    libssl3 \
     libreoffice \
     libreoffice-calc \
     libreoffice-common \
