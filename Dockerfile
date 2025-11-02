@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     fonts-dejavu-core \
     fonts-liberation \
     ghostscript \
+    libicu72 \
     libmagic1 \
     libreoffice \
     libreoffice-calc \
@@ -48,6 +49,7 @@ EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/tmp
 ENV PYTHONPATH=/app
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 
 # Ejecutar FastAPI con uvicorn (SIN --reload en producción)
 # Aumentar timeout a 300 segundos y usar 2 workers
