@@ -2,8 +2,6 @@
 FROM python:3.11-slim
 
 # Instalar dependencias del sistema para conversión de documentos
-# Nota: libicu-dev proporciona las bibliotecas ICU necesarias para aspose-zip
-# libssl3 y ca-certificates son necesarios para las operaciones de cifrado de aspose-zip
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
@@ -12,7 +10,6 @@ RUN apt-get update && apt-get install -y \
     ghostscript \
     libicu-dev \
     libmagic1 \
-    libssl3 \
     libreoffice \
     libreoffice-calc \
     libreoffice-common \
@@ -26,8 +23,14 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     python3-dev \
+    wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Instalar OpenSSL 1.1 manualmente (compatible con aspose-zip)
+RUN wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb && \
+    dpkg -i libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb && \
+    rm libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb
 
 # Establecer directorio de trabajo
 WORKDIR /app
@@ -54,7 +57,7 @@ ENV PYTHONUNBUFFERED=1
 ENV HOME=/tmp
 ENV PYTHONPATH=/app
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
-# Ejecutar FastAPI con uvicorn (SIN --reload en producción)
-# Aumentar timeout a 300 segundos y usar 2 workers
+# Ejecutar FastAPI con uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "300", "--workers", "2"]
