@@ -7,6 +7,7 @@ API basada en Python/FastAPI que convierte documentos de office
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.api import routes
 import os
 
@@ -26,6 +27,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Asegurar que los directorios de carga existan
+os.makedirs("app/uploads", exist_ok=True)
+os.makedirs("app/uploads/processed", exist_ok=True)
+
 # Incluir rutas de la API
 app.include_router(routes.router, prefix="/api")
 
@@ -42,7 +47,8 @@ async def root():
             "POST /api/documents/transform/bin - Transformar documento y devolver (binario)",
             "GET /api/health - Verificación de salud",
             "POST /api/uploads-ziprar - Cargar y extraer .zip/.rar (multipart)",
-            "POST /api/uploads-ziprar/bin - Cargar y extraer .zip/.rar (binario)"
+            "POST /api/uploads-ziprar/bin - Cargar y extraer .zip/.rar (binario)",
+            "GET /uploads/* - Acceder a archivos extraídos"
         ]
     }
 
@@ -56,6 +62,6 @@ async def health_check():
         "version": "2.0.0"
     }
 
-# Asegurar que los directorios de carga existan
-os.makedirs("app/uploads", exist_ok=True)
-os.makedirs("app/uploads/processed", exist_ok=True)
+# Montar directorio de archivos estáticos DESPUÉS de todas las rutas
+# Esto permite servir archivos extraídos vía URL
+app.mount("/uploads", StaticFiles(directory="app/uploads"), name="uploads")
