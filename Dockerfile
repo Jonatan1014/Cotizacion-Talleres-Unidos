@@ -18,6 +18,9 @@ RUN apt-get update && apt-get install -y \
     unar \
     unzip \
     xvfb \
+    gcc \
+    g++ \
+    python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,16 +30,16 @@ WORKDIR /app
 # Copiar archivo de requisitos
 COPY requirements.txt .
 
-# Instalar dependencias de Python
-RUN pip install --no-cache-dir -r requirements.txt
+# Instalar dependencias de Python con timeout extendido
+RUN pip install --no-cache-dir --timeout=300 -r requirements.txt
 
 # Copiar archivos de la aplicación
 COPY app/ ./app/
 COPY .env .env
 
 # Crear directorios de carga con permisos apropiados
-RUN mkdir -p /app/app/uploads /app/app/uploads/processed /tmp/libreoffice
-RUN chmod -R 777 /app/app/uploads /tmp
+RUN mkdir -p /app/app/uploads /app/app/uploads/processed /tmp/libreoffice && \
+    chmod -R 777 /app/app/uploads /tmp
 
 # Exponer puerto para FastAPI
 EXPOSE 8000
@@ -46,5 +49,6 @@ ENV PYTHONUNBUFFERED=1
 ENV HOME=/tmp
 ENV PYTHONPATH=/app
 
-# Ejecutar FastAPI con uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Ejecutar FastAPI con uvicorn (SIN --reload en producción)
+# Aumentar timeout a 300 segundos y usar 2 workers
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "300", "--workers", "2"]
