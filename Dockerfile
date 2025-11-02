@@ -1,8 +1,13 @@
-# Dockerfile - API de Procesamiento de Documentos con FastAPI
-FROM python:3.11-slim
+FROM ubuntu:22.04
 
-# Instalar dependencias del sistema para conversión de documentos
+# Configurar timezone y evitar prompts interactivos
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=America/Bogota
+
+# Instalar Python y dependencias del sistema
 RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3-pip \
     ca-certificates \
     curl \
     fonts-dejavu-core \
@@ -10,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     ghostscript \
     libicu-dev \
     libmagic1 \
+    libssl1.1 \
     libreoffice \
     libreoffice-calc \
     libreoffice-common \
@@ -23,41 +29,28 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     python3-dev \
-    wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar OpenSSL 1.1 manualmente (compatible con aspose-zip)
-RUN wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb && \
-    dpkg -i libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb && \
-    rm libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb
+# Crear enlaces simbólicos para Python
+RUN ln -s /usr/bin/python3.11 /usr/bin/python
 
-# Establecer directorio de trabajo
 WORKDIR /app
 
-# Copiar archivo de requisitos
 COPY requirements.txt .
-
-# Instalar dependencias de Python con timeout extendido
 RUN pip install --no-cache-dir --timeout=300 -r requirements.txt
 
-# Copiar archivos de la aplicación
 COPY app/ ./app/
 COPY .env .env
 
-# Crear directorios de carga con permisos apropiados
 RUN mkdir -p /app/app/uploads /app/app/uploads/processed /tmp/libreoffice && \
     chmod -R 777 /app/app/uploads /tmp
 
-# Exponer puerto para FastAPI
 EXPOSE 8000
 
-# Establecer variables de entorno
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/tmp
 ENV PYTHONPATH=/app
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
-ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
-# Ejecutar FastAPI con uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "300", "--workers", "2"]
