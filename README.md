@@ -1,6 +1,7 @@
 # 📄 API de Procesamiento de Documentos
 
 API de alto rendimiento basada en Python/FastAPI para procesar documentos de oficina (PDF, DOCX, XLSX, XLSM) y extraer archivos comprimidos (ZIP, RAR) en formatos estandarizados.
+- im
 
 ## 🚀 Características
 
