@@ -10,16 +10,19 @@ Lógica principal para el procesamiento de documentos:
 import os
 import uuid
 import shutil
-import subprocess
 import mimetypes
 import base64
 import zipfile
+import rarfile
 from datetime import datetime
 from typing import Dict, Any, List, BinaryIO
 from pathlib import Path
 from app.config import settings
 from app.utils.file_converter import FileConverter
 from app.models.schemas import DocumentInfo
+
+# Configurar rarfile para usar unrar-free (disponible en Debian)
+rarfile.UNRAR_TOOL = "unrar-free"
 
 
 class DocumentService:
@@ -194,44 +197,26 @@ class DocumentService:
                 print(f"[DEBUG] Extensión detectada: {ext}")
                 
                 if ext == '.rar':
-                    # Intentar usar aspose-zip si está disponible (mejor compatibilidad con RAR)
-                    try:
-                        import aspose.zip as az
-                        try:
-                            print(f"[DEBUG] Usando aspose.zip para extraer RAR")
-                            with az.rar.RarArchive(archive_path) as archive:
-                                archive.extract_to_directory(extract_dir)
-                        except Exception as e_aspose:
-                            # Si aspose falla, intentar fallback a unar
-                            print(f"[DEBUG] Aspose fallo: {e_aspose}")
-                            raise
-                    except ImportError:
-                        # Aspose no está instalado -> fallback a unar
-                        print(f"[DEBUG] aspose.zip no disponible, usando unar para extraer RAR")
-                        result = subprocess.run(
-                            ['unar', '-no-directory', '-o', extract_dir, archive_path],
-                            capture_output=True,
-                            text=True,
-                            timeout=120
-                        )
-                        print(f"[DEBUG] unar return code: {result.returncode}")
-                        print(f"[DEBUG] unar stdout: {result.stdout}")
-                        print(f"[DEBUG] unar stderr: {result.stderr}")
-                        if result.returncode != 0:
-                            raise Exception(f'Error al extraer RAR con unar: {result.stderr}')
+                    # Usar rarfile para archivos RAR (requiere unrar en el sistema)
+                    print(f"[DEBUG] Usando rarfile para extraer RAR")
+                    with rarfile.RarFile(archive_path, 'r') as rar_ref:
+                        rar_ref.extractall(extract_dir)
                 else:
                     # Usar zipfile nativo de Python para archivos ZIP
                     print(f"[DEBUG] Usando zipfile para extraer {ext}")
                     with zipfile.ZipFile(archive_path, 'r') as zip_ref:
                         zip_ref.extractall(extract_dir)
                     
+            except rarfile.Error as e:
+                shutil.rmtree(extract_dir, ignore_errors=True)
+                raise Exception(f'Error al extraer archivo RAR: {str(e)}. Verifica que el archivo no esté corrupto.')
             except FileNotFoundError as e:
                 shutil.rmtree(extract_dir, ignore_errors=True)
-                if 'unar' in str(e):
+                if 'unrar' in str(e).lower() or 'rar' in str(e).lower():
                     raise Exception(
-                        'Para extraer archivos RAR necesitas instalar unar:\n'
-                        'Linux: sudo apt-get install unar\n'
-                        'macOS: brew install unar\n'
+                        'Para extraer archivos RAR necesitas instalar unrar:\n'
+                        'Linux: sudo apt-get install unrar-free\n'
+                        'macOS: brew install unrar\n'
                         'Alternativamente, convierte el archivo a .zip que sí está soportado.'
                     )
                 raise Exception(f'Herramienta de extracción no encontrada: {str(e)}')
@@ -239,8 +224,8 @@ class DocumentService:
                 shutil.rmtree(extract_dir, ignore_errors=True)
                 error_msg = str(e)
                 
-                # Mensaje específico para archivos RAR con patool
-                if 'patool' in error_msg.lower() and 'rar' in Path(archive_path).suffix.lower():
+                # Mensaje específico para archivos RAR
+                if 'rar' in Path(archive_path).suffix.lower() and 'rarfile' not in error_msg.lower():
                     raise Exception(
                         'Error al extraer archivo RAR. Intenta con formato ZIP o verifica el archivo.'
                     )

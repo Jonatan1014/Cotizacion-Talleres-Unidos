@@ -2,17 +2,13 @@
 FROM python:3.11-slim
 
 # Instalar dependencias del sistema para conversión de documentos
-# Nota: libicu-dev proporciona las bibliotecas ICU necesarias para aspose-zip
-# libssl3 y ca-certificates son necesarios para las operaciones de cifrado de aspose-zip
+# unrar-free: Necesario para rarfile (extracción de archivos RAR)
 RUN apt-get update && apt-get install -y \
-    ca-certificates \
     curl \
     fonts-dejavu-core \
     fonts-liberation \
     ghostscript \
-    libicu-dev \
     libmagic1 \
-    libssl3 \
     libreoffice \
     libreoffice-calc \
     libreoffice-common \
@@ -20,12 +16,9 @@ RUN apt-get update && apt-get install -y \
     libreoffice-writer \
     p7zip-full \
     poppler-utils \
-    unar \
+    unrar-free \
     unzip \
     xvfb \
-    gcc \
-    g++ \
-    python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -53,7 +46,6 @@ EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/tmp
 ENV PYTHONPATH=/app
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 
 # Ejecutar FastAPI con uvicorn (SIN --reload en producción)
 # Aumentar timeout a 300 segundos y usar 2 workers
