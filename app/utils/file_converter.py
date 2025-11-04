@@ -43,14 +43,35 @@ class FileConverter:
         if not os.path.exists(pdf_path) or not os.path.isfile(pdf_path):
             raise Exception(f'El archivo PDF no existe o no es legible: {pdf_path}')
         
+        # Validar que sea un PDF válido antes de procesarlo
+        try:
+            with open(pdf_path, 'rb') as f:
+                header = f.read(5)
+                if not header.startswith(b'%PDF-'):
+                    # Si no es un PDF válido, devolver error claro
+                    raise Exception(f'El archivo no es un PDF válido (header incorrecto: {header})')
+        except Exception as e:
+            raise Exception(f'Error al validar archivo PDF: {str(e)}')
+        
         # Obtener número de páginas usando pdfinfo
         try:
             result = subprocess.run(
                 ['pdfinfo', pdf_path],
                 capture_output=True,
                 text=True,
-                check=True
+                timeout=10
             )
+            
+            # Si pdfinfo falla (PDF corrupto), copiar el PDF original sin procesarlo
+            if result.returncode != 0:
+                print(f"[WARNING] pdfinfo falló (PDF posiblemente corrupto): {result.stderr}")
+                # Devolver el PDF original sin modificar
+                original_name = Path(pdf_path).stem
+                unique_id = uuid.uuid4().hex[:12]
+                new_filename = f"{unique_id}-{original_name}.pdf"
+                output_path = os.path.join(self.processed_dir, new_filename)
+                shutil.copy(pdf_path, output_path)
+                return output_path
             
             pages = 0
             for line in result.stdout.split('\n'):
@@ -79,7 +100,8 @@ class FileConverter:
             subprocess.run(
                 ['pdftoppm', '-png', '-f', '1', '-l', '1', pdf_path, output_base],
                 check=True,
-                capture_output=True
+                capture_output=True,
+                timeout=30
             )
             
             # pdftoppm crea archivos con sufijo -1
@@ -94,6 +116,8 @@ class FileConverter:
             
             return final_path
             
+        except subprocess.TimeoutExpired:
+            raise Exception('La validación/conversión del PDF excedió el tiempo límite')
         except FileNotFoundError:
             # Si pdfinfo/pdftoppm no están disponibles (Windows), solo copiar el PDF
             original_name = Path(pdf_path).stem
@@ -103,7 +127,14 @@ class FileConverter:
             shutil.copy(pdf_path, output_path)
             return output_path
         except subprocess.CalledProcessError as e:
-            raise Exception(f'La conversión de PDF falló: {e.stderr}')
+            # Si pdftoppm falla, devolver el PDF original
+            print(f"[WARNING] pdftoppm falló: {e.stderr}")
+            original_name = Path(pdf_path).stem
+            unique_id = uuid.uuid4().hex[:12]
+            new_filename = f"{unique_id}-{original_name}.pdf"
+            output_path = os.path.join(self.processed_dir, new_filename)
+            shutil.copy(pdf_path, output_path)
+            return output_path
     
     def convert_docx_to_pdf(self, docx_path: str) -> str:
         """
@@ -207,22 +238,28 @@ class FileConverter:
             shutil.copy(excel_path, temp_file)
             os.chmod(temp_file, 0o644)
             
-            # Convertir usando LibreOffice
+            # Convertir usando LibreOffice con filtros específicos para Excel
             env = os.environ.copy()
             env['HOME'] = '/tmp'
             
+            # Usar filtro calc_pdf_Export para mejor compatibilidad con Excel
             result = subprocess.run([
-                'timeout', '60',
+                'timeout', '90',  # Aumentar timeout para archivos Excel grandes
                 'xvfb-run', '--auto-servernum', '--server-args=-screen 0 1024x768x24',
                 'libreoffice', '--headless', '--invisible', '--nodefault',
                 '--nofirststartwizard', '--nolockcheck', '--nologo', '--norestore',
-                '--convert-to', 'pdf', '--outdir', temp_dir, temp_file
+                '--convert-to', 'pdf:calc_pdf_Export',  # Filtro específico para Calc
+                '--outdir', temp_dir, temp_file
             ],
                 capture_output=True,
                 text=True,
                 env=env,
-                timeout=settings.conversion_timeout
+                timeout=90
             )
+            
+            # Verificar si hubo errores en stderr
+            if result.returncode != 0:
+                raise Exception(f'LibreOffice falló con código {result.returncode}. Error: {result.stderr}')
             
             # Generar nombre de archivo de salida
             original_name = Path(excel_path).stem
@@ -234,17 +271,32 @@ class FileConverter:
             converted_name = Path(excel_path).stem + '.pdf'
             converted_file = os.path.join(temp_dir, converted_name)
             
-            if os.path.exists(converted_file):
-                shutil.move(converted_file, final_path)
-            else:
-                raise Exception(f'LibreOffice no pudo crear el PDF. Salida: {result.stdout} {result.stderr}')
+            if not os.path.exists(converted_file):
+                raise Exception(f'LibreOffice no creó el PDF. stdout: {result.stdout}, stderr: {result.stderr}')
             
+            # Verificar que el PDF no esté vacío
+            file_size = os.path.getsize(converted_file)
+            if file_size < 100:  # Un PDF válido mínimo tiene al menos 100 bytes
+                raise Exception(f'El PDF generado está corrupto o vacío (tamaño: {file_size} bytes)')
+            
+            # Verificar que el archivo comience con el magic number de PDF
+            with open(converted_file, 'rb') as f:
+                header = f.read(5)
+                if not header.startswith(b'%PDF-'):
+                    raise Exception(f'El archivo generado no es un PDF válido (header: {header})')
+            
+            # Mover archivo convertido
+            shutil.move(converted_file, final_path)
+            
+            # Validación final
             if not os.path.exists(final_path):
-                raise Exception('El archivo PDF no fue creado')
+                raise Exception('El archivo PDF no fue creado correctamente')
             
             return final_path
             
-        except FileNotFoundError:
+        except subprocess.TimeoutExpired:
+            raise Exception('La conversión de Excel a PDF excedió el tiempo límite (90 segundos)')
+        except FileNotFoundError as e:
             # Si LibreOffice no está disponible, solo copiar el archivo original
             ext = Path(excel_path).suffix
             original_name = Path(excel_path).stem
