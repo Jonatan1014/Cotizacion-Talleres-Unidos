@@ -1,13 +1,10 @@
-FROM ubuntu:22.04
+# Dockerfile - API de Procesamiento de Documentos con FastAPI
+FROM python:3.11-slim
 
-# Configurar timezone y evitar prompts interactivos
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=America/Bogota
-
-# Instalar Python y dependencias del sistema
+# Instalar dependencias del sistema para conversión de documentos
+# Nota: libicu-dev proporciona las bibliotecas ICU necesarias para aspose-zip
+# libssl3 y ca-certificates son necesarios para las operaciones de cifrado de aspose-zip
 RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3-pip \
     ca-certificates \
     curl \
     fonts-dejavu-core \
@@ -15,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     ghostscript \
     libicu-dev \
     libmagic1 \
-    libssl1.1 \
+    libssl3 \
     libreoffice \
     libreoffice-calc \
     libreoffice-common \
@@ -32,25 +29,32 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Crear enlaces simbólicos para Python
-RUN ln -s /usr/bin/python3.11 /usr/bin/python
-
+# Establecer directorio de trabajo
 WORKDIR /app
 
+# Copiar archivo de requisitos
 COPY requirements.txt .
+
+# Instalar dependencias de Python con timeout extendido
 RUN pip install --no-cache-dir --timeout=300 -r requirements.txt
 
+# Copiar archivos de la aplicación
 COPY app/ ./app/
 COPY .env .env
 
+# Crear directorios de carga con permisos apropiados
 RUN mkdir -p /app/app/uploads /app/app/uploads/processed /tmp/libreoffice && \
     chmod -R 777 /app/app/uploads /tmp
 
+# Exponer puerto para FastAPI
 EXPOSE 8000
 
+# Establecer variables de entorno
 ENV PYTHONUNBUFFERED=1
 ENV HOME=/tmp
 ENV PYTHONPATH=/app
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 
+# Ejecutar FastAPI con uvicorn (SIN --reload en producción)
+# Aumentar timeout a 300 segundos y usar 2 workers
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "300", "--workers", "2"]

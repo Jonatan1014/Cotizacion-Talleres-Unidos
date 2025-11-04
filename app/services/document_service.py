@@ -13,10 +13,10 @@ import shutil
 import subprocess
 import mimetypes
 import base64
+import zipfile
 from datetime import datetime
 from typing import Dict, Any, List, BinaryIO
 from pathlib import Path
-from pyunpack import Archive
 from app.config import settings
 from app.utils.file_converter import FileConverter
 from app.models.schemas import DocumentInfo
@@ -220,9 +220,10 @@ class DocumentService:
                         if result.returncode != 0:
                             raise Exception(f'Error al extraer RAR con unar: {result.stderr}')
                 else:
-                    # Usar pyunpack para otros formatos (ZIP, 7Z, etc.)
-                    print(f"[DEBUG] Usando pyunpack para extraer {ext}")
-                    Archive(archive_path).extractall(extract_dir)
+                    # Usar zipfile nativo de Python para archivos ZIP
+                    print(f"[DEBUG] Usando zipfile para extraer {ext}")
+                    with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                        zip_ref.extractall(extract_dir)
                     
             except FileNotFoundError as e:
                 shutil.rmtree(extract_dir, ignore_errors=True)
