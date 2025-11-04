@@ -200,13 +200,13 @@ class FileConverter:
             return final_path
             
         except FileNotFoundError:
-            # Si LibreOffice no está disponible, solo copiar el archivo original
-            original_name = Path(docx_path).stem
-            unique_id = uuid.uuid4().hex[:12]
-            new_filename = f"{unique_id}-{original_name}.docx"
-            output_path = os.path.join(self.processed_dir, new_filename)
-            shutil.copy(docx_path, output_path)
-            return output_path
+            # Si LibreOffice no está disponible (Windows), devolver error claro
+            print("[ERROR] LibreOffice no está instalado o no está en el PATH")
+            raise Exception(
+                'LibreOffice no está disponible. '
+                'En entorno local de Windows, instala LibreOffice o ejecuta en Docker. '
+                'La conversión de DOCX a PDF requiere LibreOffice.'
+            )
         finally:
             # Limpiar directorio temporal
             if os.path.exists(temp_dir):
@@ -243,6 +243,7 @@ class FileConverter:
             env['HOME'] = '/tmp'
             
             # Usar filtro calc_pdf_Export para mejor compatibilidad con Excel
+            print(f"[DEBUG] Iniciando conversión de Excel a PDF: {temp_file}")
             result = subprocess.run([
                 'timeout', '90',  # Aumentar timeout para archivos Excel grandes
                 'xvfb-run', '--auto-servernum', '--server-args=-screen 0 1024x768x24',
@@ -256,6 +257,10 @@ class FileConverter:
                 env=env,
                 timeout=90
             )
+            
+            print(f"[DEBUG] LibreOffice return code: {result.returncode}")
+            print(f"[DEBUG] LibreOffice stdout: {result.stdout}")
+            print(f"[DEBUG] LibreOffice stderr: {result.stderr}")
             
             # Verificar si hubo errores en stderr
             if result.returncode != 0:
@@ -296,15 +301,14 @@ class FileConverter:
             
         except subprocess.TimeoutExpired:
             raise Exception('La conversión de Excel a PDF excedió el tiempo límite (90 segundos)')
-        except FileNotFoundError as e:
-            # Si LibreOffice no está disponible, solo copiar el archivo original
-            ext = Path(excel_path).suffix
-            original_name = Path(excel_path).stem
-            unique_id = uuid.uuid4().hex[:12]
-            new_filename = f"{unique_id}-{original_name}{ext}"
-            output_path = os.path.join(self.processed_dir, new_filename)
-            shutil.copy(excel_path, output_path)
-            return output_path
+        except FileNotFoundError:
+            # Si LibreOffice no está disponible (Windows), devolver mensaje claro
+            print("[ERROR] LibreOffice no está instalado o no está en el PATH")
+            raise Exception(
+                'LibreOffice no está disponible. '
+                'En entorno local de Windows, instala LibreOffice o ejecuta en Docker. '
+                'La conversión de Excel a PDF requiere LibreOffice.'
+            )
         finally:
             # Limpiar directorio temporal
             if os.path.exists(temp_dir):
