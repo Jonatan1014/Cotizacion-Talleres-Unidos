@@ -32,8 +32,8 @@ class FileConverter {
                 }
             }
             
-            // Si el PDF tiene más de 1 página, devolver el archivo original sin cambios
-            if ($pages > 1) {
+            // Si el PDF tiene más de 3 páginas, devolver el archivo original sin cambios
+            if ($pages > 3) {
                 // Generar nuevo nombre con ID para mantener consistencia
                 $originalNameWithoutExt = pathinfo($pdfPath, PATHINFO_FILENAME);
                 $uniqueId = uniqid();
@@ -48,31 +48,45 @@ class FileConverter {
                 return $outputPath;
             }
             
-            // Si el PDF tiene solo 1 página, convertir a PNG
+            // Si el PDF tiene 1 a 3 páginas, convertir todas las páginas a PNG
             $originalNameWithoutExt = pathinfo($pdfPath, PATHINFO_FILENAME);
             $uniqueId = uniqid();
-            $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.png';
-            $outputPath = $this->processedDir . $newFileName;
             
-            // Convert first page of PDF to PNG
-            $command = "pdftoppm -png -f 1 -l 1 " . escapeshellarg($pdfPath) . " " . escapeshellarg($this->processedDir . $uniqueId . '-' . $originalNameWithoutExt) . " 2>&1";
+            // Convert all pages (1 to 3) of PDF to PNG
+            $command = "pdftoppm -png " . escapeshellarg($pdfPath) . " " . escapeshellarg($this->processedDir . $uniqueId . '-' . $originalNameWithoutExt) . " 2>&1";
             exec($command, $output, $returnCode);
             
             if ($returnCode !== 0) {
                 throw new Exception('Failed to convert PDF to PNG. Command: ' . $command . ' Output: ' . implode("\n", $output));
             }
             
-            // Verificar que el archivo se creó (pdftoppm puede crear con sufijo -1)
-            $finalPath = $this->processedDir . $uniqueId . '-' . $originalNameWithoutExt . '-1.png';
-            if (file_exists($finalPath)) {
-                rename($finalPath, $outputPath);
+            // Si solo hay 1 página, renombrar el archivo generado
+            if ($pages == 1) {
+                $newFileName = $uniqueId . '-' . $originalNameWithoutExt . '.png';
+                $outputPath = $this->processedDir . $newFileName;
+                $finalPath = $this->processedDir . $uniqueId . '-' . $originalNameWithoutExt . '-1.png';
+                
+                if (file_exists($finalPath)) {
+                    rename($finalPath, $outputPath);
+                }
+                
+                if (!file_exists($outputPath)) {
+                    throw new Exception('PNG file was not created');
+                }
+                
+                return $outputPath;
+            } else {
+                // Si hay 2 o 3 páginas, devolver la ruta del primer archivo
+                // pdftoppm genera archivos como: nombre-1.png, nombre-2.png, nombre-3.png
+                $firstPage = $this->processedDir . $uniqueId . '-' . $originalNameWithoutExt . '-1.png';
+                
+                if (!file_exists($firstPage)) {
+                    throw new Exception('PNG files were not created');
+                }
+                
+                // Devolver la ruta del primer archivo (las otras páginas también están disponibles)
+                return $firstPage;
             }
-            
-            if (!file_exists($outputPath)) {
-                throw new Exception('PNG file was not created');
-            }
-            
-            return $outputPath; // ← Devuelve la ruta absoluta
         } catch (Exception $e) {
             throw new Exception('PDF conversion failed: ' . $e->getMessage());
         }
