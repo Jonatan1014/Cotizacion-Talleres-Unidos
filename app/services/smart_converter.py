@@ -345,13 +345,34 @@ class SmartConverter:
         """
         Convertir PDF a imagen JPG.
         Solo convierte si el PDF tiene exactamente 1 página.
+        Si tiene más de 1 página, devuelve el PDF original sin modificar.
         """
+        # Verificar número de páginas primero
+        page_count = self._get_pdf_page_count(content)
+        
+        # Si tiene más de 1 página, devolver el PDF original sin procesar
+        if page_count != 1:
+            return SmartConversionResult(
+                success=True,
+                output_data=content,
+                output_format="pdf",
+                output_filename=filename,
+                original_type=DetectedFileType.PDF,
+                mime_type="application/pdf",
+                file_size=len(content),
+                metadata={
+                    "page_count": page_count,
+                    "converted": False,
+                    "reason": f"PDF con {page_count} páginas devuelto sin modificar"
+                }
+            )
+        
         try:
             # Intentar usar pdf2image (basado en poppler)
             from pdf2image import convert_from_bytes
-            from pdf2image.exceptions import PDFInfoNotInstalledError, PDFPageCountError
+            from pdf2image.exceptions import PDFInfoNotInstalledError
             
-            # Obtener información del PDF
+            # Convertir PDF a imagen
             try:
                 images = convert_from_bytes(
                     content,
@@ -361,43 +382,37 @@ class SmartConverter:
                     fmt='jpeg'
                 )
             except PDFInfoNotInstalledError:
+                # Si no está poppler, devolver el PDF original
                 return SmartConversionResult(
-                    success=False,
-                    output_data=None,
-                    output_format="jpg",
-                    output_filename="",
+                    success=True,
+                    output_data=content,
+                    output_format="pdf",
+                    output_filename=filename,
                     original_type=DetectedFileType.PDF,
-                    mime_type="",
-                    file_size=0,
-                    error_message="Poppler no está instalado (requerido para convertir PDF a imagen)"
-                )
-            
-            # Verificar número de páginas
-            page_count = self._get_pdf_page_count(content)
-            
-            if page_count != 1:
-                return SmartConversionResult(
-                    success=False,
-                    output_data=None,
-                    output_format="jpg",
-                    output_filename="",
-                    original_type=DetectedFileType.PDF,
-                    mime_type="",
-                    file_size=0,
-                    error_message=f"El PDF tiene {page_count} páginas. Solo se convierten PDFs de 1 página.",
-                    metadata={"page_count": page_count}
+                    mime_type="application/pdf",
+                    file_size=len(content),
+                    metadata={
+                        "page_count": page_count,
+                        "converted": False,
+                        "reason": "Poppler no instalado, PDF devuelto sin modificar"
+                    }
                 )
             
             if not images:
+                # Si no se pudo convertir, devolver el PDF original
                 return SmartConversionResult(
-                    success=False,
-                    output_data=None,
-                    output_format="jpg",
-                    output_filename="",
+                    success=True,
+                    output_data=content,
+                    output_format="pdf",
+                    output_filename=filename,
                     original_type=DetectedFileType.PDF,
-                    mime_type="",
-                    file_size=0,
-                    error_message="No se pudo convertir el PDF a imagen"
+                    mime_type="application/pdf",
+                    file_size=len(content),
+                    metadata={
+                        "page_count": page_count,
+                        "converted": False,
+                        "reason": "No se pudo convertir, PDF devuelto sin modificar"
+                    }
                 )
             
             # Convertir imagen a bytes
@@ -415,7 +430,7 @@ class SmartConverter:
                 original_type=DetectedFileType.PDF,
                 mime_type="image/jpeg",
                 file_size=len(output_data),
-                metadata={"page_count": 1, "dpi": settings.PDF_DPI}
+                metadata={"page_count": 1, "dpi": settings.PDF_DPI, "converted": True}
             )
             
         except ImportError:
@@ -430,32 +445,41 @@ class SmartConverter:
         """Convertir PDF a imagen usando Ghostscript directamente."""
         gs_path = shutil.which("gs") or shutil.which("gswin64c")
         
-        if not gs_path:
-            return SmartConversionResult(
-                success=False,
-                output_data=None,
-                output_format="jpg",
-                output_filename="",
-                original_type=DetectedFileType.PDF,
-                mime_type="",
-                file_size=0,
-                error_message="Ghostscript no está instalado"
-            )
-        
         # Verificar páginas primero
         page_count = self._get_pdf_page_count(content)
         
+        # Si tiene más de 1 página, devolver el PDF original sin procesar
         if page_count != 1:
             return SmartConversionResult(
-                success=False,
-                output_data=None,
-                output_format="jpg",
-                output_filename="",
+                success=True,
+                output_data=content,
+                output_format="pdf",
+                output_filename=filename,
                 original_type=DetectedFileType.PDF,
-                mime_type="",
-                file_size=0,
-                error_message=f"El PDF tiene {page_count} páginas. Solo se convierten PDFs de 1 página.",
-                metadata={"page_count": page_count}
+                mime_type="application/pdf",
+                file_size=len(content),
+                metadata={
+                    "page_count": page_count,
+                    "converted": False,
+                    "reason": f"PDF con {page_count} páginas devuelto sin modificar"
+                }
+            )
+        
+        if not gs_path:
+            # Sin Ghostscript, devolver PDF original
+            return SmartConversionResult(
+                success=True,
+                output_data=content,
+                output_format="pdf",
+                output_filename=filename,
+                original_type=DetectedFileType.PDF,
+                mime_type="application/pdf",
+                file_size=len(content),
+                metadata={
+                    "page_count": page_count,
+                    "converted": False,
+                    "reason": "Ghostscript no instalado, PDF devuelto sin modificar"
+                }
             )
         
         with tempfile.TemporaryDirectory(dir=self.temp_dir) as temp_dir:
@@ -484,18 +508,23 @@ class SmartConverter:
                 stderr=asyncio.subprocess.PIPE
             )
             
-            _, stderr = await process.communicate()
+            _, _ = await process.communicate()
             
             if not output_file.exists():
+                # Si falla conversión, devolver PDF original
                 return SmartConversionResult(
-                    success=False,
-                    output_data=None,
-                    output_format="jpg",
-                    output_filename="",
+                    success=True,
+                    output_data=content,
+                    output_format="pdf",
+                    output_filename=filename,
                     original_type=DetectedFileType.PDF,
-                    mime_type="",
-                    file_size=0,
-                    error_message=f"Error en Ghostscript: {stderr.decode()}"
+                    mime_type="application/pdf",
+                    file_size=len(content),
+                    metadata={
+                        "page_count": page_count,
+                        "converted": False,
+                        "reason": "Error en conversión, PDF devuelto sin modificar"
+                    }
                 )
             
             output_data = output_file.read_bytes()

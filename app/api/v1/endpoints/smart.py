@@ -33,13 +33,14 @@ def _validate_file(file: UploadFile) -> None:
     
     - **Word** (.doc, .docx, .odt, .rtf) → **PDF**
     - **Excel** (.xls, .xlsx, .ods, .csv) → **PDF**
-    - **PDF** (solo 1 página) → **JPG**
+    - **PDF** (1 página) → **JPG**
+    - **PDF** (más de 1 página) → Se devuelve **sin modificar**
     
     El archivo convertido se devuelve directamente en la respuesta.
     """,
     responses={
         200: {
-            "description": "Archivo convertido exitosamente",
+            "description": "Archivo procesado exitosamente",
             "content": {
                 "application/pdf": {},
                 "image/jpeg": {},
@@ -168,7 +169,10 @@ async def detect_file_type(
     conversion_map = {
         DetectedFileType.WORD: {"target": "pdf", "description": "Se convertirá a PDF"},
         DetectedFileType.EXCEL: {"target": "pdf", "description": "Se convertirá a PDF"},
-        DetectedFileType.PDF: {"target": "jpg", "description": "Se convertirá a JPG (solo si tiene 1 página)"},
+        DetectedFileType.PDF: {
+            "target": "jpg",
+            "description": "Se convertirá a JPG si tiene 1 página, de lo contrario se devuelve sin modificar"
+        },
         DetectedFileType.UNKNOWN: {"target": None, "description": "Tipo no soportado"}
     }
     
@@ -210,7 +214,8 @@ async def get_supported_types():
                 "type": "pdf",
                 "extensions": [".pdf"],
                 "converts_to": "jpg",
-                "condition": "Solo PDFs de 1 página",
+                "condition": "Solo PDFs de 1 página se convierten a JPG",
+                "fallback": "PDFs con más de 1 página se devuelven sin modificar",
                 "description": "Documentos PDF"
             }
         ],

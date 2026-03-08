@@ -11,6 +11,7 @@ API REST para conversión de archivos construida con FastAPI. Soporta conversió
   - Word (.doc, .docx) → PDF
   - Excel (.xls, .xlsx) → PDF
   - PDF (1 página) → JPG
+  - PDF (múltiples páginas) → Se devuelve sin modificar
 - **API RESTful** con documentación automática (Swagger/OpenAPI)
 - **Arquitectura escalable** con patrón Factory y servicios modulares
 - **Docker ready** para fácil despliegue
