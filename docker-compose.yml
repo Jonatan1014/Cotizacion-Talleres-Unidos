@@ -1,0 +1,51 @@
+# File Conversion API - Docker Compose
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: file-conversion-api
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=File Conversion API
+      - APP_VERSION=1.0.0
+      - DEBUG=false
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MAX_FILE_SIZE=52428800  # 50 MB
+      - TEMP_FILE_EXPIRY_HOURS=24
+    volumes:
+      # Persistent storage for files
+      - ./storage/uploads:/app/storage/uploads
+      - ./storage/outputs:/app/storage/outputs
+      - ./storage/temp:/app/storage/temp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Redis for caching/queuing (for future scalability)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: file-conversion-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   restart: unless-stopped
+
+volumes:
+  uploads:
+  outputs:
+  temp:
+  # redis_data:
+
+networks:
+  default:
+    name: file-conversion-network
